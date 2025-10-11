@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "name": "Khu vực A",
+    "description": "Mô tả khu vực A",
+    "qr_code": "QR_A_001",
+    "is_active": 1,
+    "created_at": "2025-09-25 03:27:41"
+  },
+  {
+    "id": 2,
+    "name": "Khu vực B",
+    "description": "Mô tả khu vực B",
+    "qr_code": "QR_B_002",
+    "is_active": 1,
+    "created_at": "2025-09-25 03:27:41"
+  },
+  {
+    "id": 3,
+    "name": "Khu vực C",
+    "description": "Mô tả khu vực C",
+    "qr_code": "QR_C_003",
+    "is_active": 1,
+    "created_at": "2025-09-25 03:27:41"
+  },
+  {
+    "id": 4,
+    "name": "Khu vực D",
+    "description": "Mô tả khu vực D",
+    "qr_code": "QR_D_004",
+    "is_active": 1,
+    "created_at": "2025-09-25 03:27:41"
+  },
+  {
+    "id": 5,
+    "name": "Khu vực E",
+    "description": "Mô tả khu vực E",
+    "qr_code": "QR_E_005",
+    "is_active": 1,
+    "created_at": "2025-09-25 03:27:41"
+  }
+]

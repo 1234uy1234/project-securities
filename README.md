@@ -1,36 +1,164 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MANHTOAN PLASTIC - Hệ thống Tuần tra
 
-## Getting Started
+Hệ thống tuần tra thông minh sử dụng mã QR và GPS để quản lý tuần tra của nhân viên.
 
-First, run the development server:
+## Tính năng chính
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### 👤 Nhân viên
+- Đăng nhập vào hệ thống
+- Xem nhiệm vụ tuần tra được phân công
+- Quét mã QR để xác nhận tuần tra
+- Chụp ảnh tại vị trí tuần tra
+- Xem lịch sử tuần tra cá nhân
+- Sử dụng offline với PWA
+
+### 👨‍💼 Quản lý
+- Quản lý tài khoản nhân viên
+- Tạo và phân công nhiệm vụ tuần tra
+- Lên lịch tuần tra theo tuần
+- Xem báo cáo tuần tra toàn bộ nhân viên
+- Quản lý vị trí tuần tra
+
+### 🏢 Admin
+- Quản lý toàn bộ hệ thống
+- Tạo tài khoản quản lý
+- Cấu hình hệ thống
+- Xem thống kê tổng quan
+
+## Cấu trúc dự án
+
+```
+shopee/
+├── frontend/                 # React + Vite frontend
+│   ├── src/
+│   │   ├── components/      # React components
+│   │   ├── pages/          # Các trang chính
+│   │   ├── hooks/          # Custom hooks
+│   │   ├── utils/          # Utility functions
+│   │   └── assets/         # Hình ảnh, icons
+├── backend/                 # Python FastAPI backend
+│   ├── app/
+│   │   ├── models/         # Database models
+│   │   ├── routes/         # API routes
+│   │   ├── services/       # Business logic
+│   │   └── utils/          # Helper functions
+│   └── requirements.txt     # Python dependencies
+└── database/               # Database scripts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Cài đặt và chạy
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Backend
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Cài đặt Python 3.8+
+2. Cài đặt PostgreSQL
+3. Tạo database `patrol_system`
+4. Cài đặt dependencies:
 
-## Learn More
+```bash
+cd backend
+pip install -r requirements.txt
+```
 
-To learn more about Next.js, take a look at the following resources:
+5. Chạy backend:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Backend sẽ chạy tại: https://10.10.68.22:8000
 
-## Deploy on Vercel
+### Frontend
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Cài đặt Node.js 16+
+2. Cài đặt dependencies:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+cd frontend
+npm install
+```
+
+3. Chạy frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Frontend sẽ chạy tại: https://10.10.68.22:5173
+
+## API Endpoints
+
+### Authentication
+- `POST /auth/login` - Đăng nhập
+- `POST /auth/refresh` - Làm mới token
+
+### Users
+- `GET /users/me` - Thông tin user hiện tại
+- `GET /users` - Danh sách users (Admin/Manager)
+- `POST /users` - Tạo user mới (Admin/Manager)
+- `PUT /users/{id}` - Cập nhật user (Admin/Manager)
+
+### Patrol Tasks
+- `GET /patrol-tasks` - Danh sách nhiệm vụ tuần tra
+- `POST /patrol-tasks` - Tạo nhiệm vụ mới (Manager)
+- `PUT /patrol-tasks/{id}` - Cập nhật nhiệm vụ (Manager)
+- `DELETE /patrol-tasks/{id}` - Xóa nhiệm vụ (Manager)
+
+### Patrol Records
+- `POST /patrol-records/scan` - Ghi nhận tuần tra bằng QR
+- `GET /patrol-records/history` - Lịch sử tuần tra
+- `GET /patrol-records/report` - Báo cáo tuần tra (Manager)
+
+### Locations
+- `GET /locations` - Danh sách vị trí tuần tra
+- `POST /locations` - Tạo vị trí mới (Manager)
+- `PUT /locations/{id}` - Cập nhật vị trí (Manager)
+
+## Database Schema
+
+### Users
+- id, username, email, password_hash, role, full_name, phone, created_at, updated_at
+
+### PatrolTasks
+- id, title, description, location_id, assigned_to, schedule_week, status, created_by, created_at, updated_at
+
+### PatrolRecords
+- id, user_id, task_id, location_id, check_in_time, check_out_time, gps_latitude, gps_longitude, photo_url, notes, created_at
+
+### Locations
+- id, name, description, qr_code, address, gps_latitude, gps_longitude, created_at, updated_at
+
+## Tính năng PWA
+
+- Service Worker để cache tài nguyên
+- IndexedDB để lưu dữ liệu offline
+- Đồng bộ dữ liệu khi có mạng
+- Cài đặt trên thiết bị di động
+
+## Bảo mật
+
+- JWT authentication
+- Role-based access control
+- Password hashing với bcrypt
+- CORS configuration
+- Rate limiting
+
+## Triển khai
+
+### Production
+1. Build frontend: `npm run build`
+2. Sử dụng Gunicorn cho backend
+3. Nginx reverse proxy
+4. PostgreSQL production setup
+5. Environment variables cho production
+
+### Docker (Tùy chọn)
+```bash
+docker-compose up -d
+```
+
+## Hỗ trợ
+
+Nếu có vấn đề gì, vui lòng tạo issue hoặc liên hệ team phát triển.

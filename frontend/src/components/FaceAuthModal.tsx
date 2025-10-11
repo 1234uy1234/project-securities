@@ -1,0 +1,501 @@
+import React, { useRef, useState, useCallback } from 'react';
+import { X, Camera, CheckCircle, AlertCircle, User } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
+import cameraManager, { CAMERA_TYPES, CAMERA_CONSTRAINTS } from '../utils/cameraManager';
+
+interface FaceAuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (userData: any) => void;
+  mode: 'register' | 'verify';
+  onRegisterSuccess?: () => void;
+}
+
+const FaceAuthModal: React.FC<FaceAuthModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  mode,
+  onRegisterSuccess
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+
+  const startCamera = useCallback(async () => {
+    try {
+      setError(null);
+      console.log('🎥 Starting face auth camera...');
+      
+      // Sử dụng CameraManager để tránh xung đột
+      const mediaStream = await cameraManager.getStream(
+        CAMERA_TYPES.FACE_AUTH,
+        CAMERA_CONSTRAINTS[CAMERA_TYPES.FACE_AUTH]
+      );
+      
+      console.log('✅ Camera stream obtained via CameraManager');
+      setStream(mediaStream);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        
+        // Đảm bảo video load xong và play mượt
+        videoRef.current.onloadedmetadata = () => {
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log('✅ Face auth camera ready');
+            }).catch((playError) => {
+              console.error('❌ Video play error:', playError);
+              setError('Lỗi phát video. Vui lòng thử lại.');
+            });
+          }
+        };
+        
+        // Thêm event listener để xử lý lỗi
+        videoRef.current.onerror = (e) => {
+          console.error('❌ Video error:', e);
+          setError('Lỗi hiển thị video. Vui lòng thử lại.');
+        };
+      }
+    } catch (err: any) {
+      console.error('❌ Camera error:', err);
+      
+      let errorMessage = 'Không thể truy cập camera. ';
+      if (err.name === 'NotAllowedError') {
+        errorMessage += 'Quyền truy cập camera bị từ chối. Vui lòng cho phép truy cập camera.';
+      } else if (err.name === 'NotFoundError') {
+        errorMessage += 'Không tìm thấy camera nào trên thiết bị.';
+      } else if (err.name === 'NotReadableError') {
+        errorMessage += 'Camera đang được sử dụng bởi ứng dụng khác.';
+      } else {
+        errorMessage += err.message || 'Vui lòng kiểm tra quyền truy cập camera.';
+      }
+      
+      setError(errorMessage);
+    }
+  }, []);
+
+  const stopCamera = useCallback(async () => {
+    try {
+      await cameraManager.stopStream(CAMERA_TYPES.FACE_AUTH);
+      setStream(null);
+      console.log('✅ Face auth camera stopped via CameraManager');
+    } catch (error) {
+      console.error('❌ Error stopping camera:', error);
+    }
+  }, []);
+
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current || isCapturing) return;
+
+    setIsCapturing(true);
+    
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        console.error('❌ Canvas context not available');
+        setIsCapturing(false);
+        return;
+      }
+
+      // Kiểm tra video có sẵn sàng không
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.error('❌ Video not ready - dimensions are 0');
+        setIsCapturing(false);
+        return;
+      }
+
+      // Set canvas size to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw video frame to canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert to base64 với quality tốt hơn
+      const base64 = canvas.toDataURL('image/jpeg', 0.9);
+      
+      // Debug: Log image info
+      console.log('📸 Captured image info:');
+      console.log('- Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+      console.log('- Canvas dimensions:', canvas.width, 'x', canvas.height);
+      console.log('- Size:', base64.length, 'characters');
+      console.log('- Format:', base64.split(',')[0]);
+      console.log('- Data length:', base64.split(',')[1] ? base64.split(',')[1].length : 'N/A');
+      
+      // Check if image is valid
+      if (!base64.startsWith('data:image/')) {
+        console.error('❌ Invalid image format:', base64.substring(0, 50));
+        setIsCapturing(false);
+        return;
+      }
+      
+      const base64Data = base64.split(',')[1];
+      if (!base64Data) {
+        console.error('❌ No base64 data found');
+        setIsCapturing(false);
+        return;
+      }
+      
+      // Check base64 padding
+      const padding = base64Data.length % 4;
+      if (padding !== 0) {
+        console.error('❌ Base64 padding error:', padding);
+        setIsCapturing(false);
+        return;
+      }
+      
+      console.log('✅ Image format OK');
+      setIsCapturing(false);
+      return base64;
+    } catch (error) {
+      console.error('❌ Error capturing photo:', error);
+      setIsCapturing(false);
+      return;
+    }
+  }, [isCapturing]); // Add isCapturing to dependencies
+
+  const processFaceAuth = async (imageData: string) => {
+    setIsProcessing(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // Validate image data trước khi gửi
+      if (!imageData || !imageData.startsWith('data:image/')) {
+        throw new Error('Dữ liệu ảnh không hợp lệ');
+      }
+      
+      const base64Data = imageData.split(',')[1];
+      if (!base64Data || base64Data.length < 1000) {
+        throw new Error('Ảnh quá nhỏ hoặc không có dữ liệu');
+      }
+      
+      let endpoint;
+      
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://biuniquely-wreckful-blake.ngrok-free.dev';
+      if (mode === 'register') {
+        // SỬ DỤNG API MỚI - luôn dùng save-face cho register
+        endpoint = `${baseUrl}/api/face-storage/save-face`;
+      } else {
+        // SỬ DỤNG API MỚI - dùng compare-face cho verify
+        endpoint = `${baseUrl}/api/face-storage/compare-face`;
+      }
+
+      // Debug: Log request info
+      console.log('🔍 Face auth request info:');
+      console.log('- Endpoint:', endpoint);
+      console.log('- Mode:', mode);
+      console.log('- Image size:', imageData.length, 'characters');
+      console.log('- Image format:', imageData.split(',')[0]);
+      console.log('- Base64 data length:', base64Data.length);
+
+      // Sử dụng axios cho tất cả requests
+      const { api } = await import('../utils/api');
+      
+      // Tạo form data
+      const formData = new FormData();
+      formData.append('image_data', imageData);
+      
+      // API MỚI: register cần username, compare không cần
+      if (mode === 'register') {
+        // Lấy username từ auth store hoặc localStorage (required for register)
+        const authStore = useAuthStore.getState();
+        const username = authStore.user?.username || localStorage.getItem('username');
+        
+        if (username) {
+          formData.append('username', username);
+          console.log('🔍 Adding username to register request:', username);
+        } else {
+          throw new Error('Username is required for face registration');
+        }
+      } else {
+        // compare-face không cần username, sẽ so sánh với tất cả
+        console.log('🔍 Compare mode: will search all accounts');
+      }
+      
+      // Gửi request với axios
+      const apiPath = endpoint.replace(`${baseUrl}/api`, '');
+      const response = await api.post(apiPath, formData);
+
+      console.log('📡 Response status:', response.status, response.statusText);
+      
+      // Xử lý response từ axios
+      const result = response.data;
+      console.log('📡 Response data:', result);
+
+      if (result.success) {
+        setSuccess(result.message);
+        
+        // Lưu token từ face authentication (cho cả register và verify)
+        if (result.access_token) {
+          console.log('FACE AUTH DEBUG: Saving token and user data:', result);
+          
+          // Lưu vào localStorage TRƯỚC
+          localStorage.setItem('access_token', result.access_token);
+          localStorage.setItem('token_type', result.token_type || 'bearer');
+          
+          // Lưu vào store với debug log
+          const { setToken, setUser } = useAuthStore.getState();
+          console.log('FACE AUTH DEBUG: Before setToken - Store state:', useAuthStore.getState());
+          
+          setToken(result.access_token);
+          // API MỚI: compare-face trả về matched_user, register trả về user
+          const userData = result.matched_user || result.user;
+          setUser(userData);
+          
+          // Set isAuthenticated = true
+          useAuthStore.setState({ isAuthenticated: true });
+          
+          console.log('FACE AUTH DEBUG: After setToken - Store state:', useAuthStore.getState());
+          console.log('FACE AUTH DEBUG: localStorage access_token:', localStorage.getItem('access_token'));
+          
+          // Set token trong API headers ngay lập tức
+          const { api } = await import('../utils/api');
+          api.defaults.headers.common['Authorization'] = `Bearer ${result.access_token}`;
+          
+          console.log('FACE AUTH DEBUG: API headers set:', api.defaults.headers.common['Authorization']);
+          
+          // Force persist to localStorage
+          const authState = {
+            user: userData,
+            token: result.access_token,
+            isAuthenticated: true
+          };
+          localStorage.setItem('auth-storage', JSON.stringify(authState));
+          console.log('FACE AUTH DEBUG: Force saved to auth-storage:', authState);
+        }
+        
+        if (mode === 'register') {
+          onRegisterSuccess?.();
+          setTimeout(() => {
+            onClose();
+          }, 2000);
+        } else {
+          // API MỚI: compare-face trả về matched_user thay vì user
+          if (result.matched_user) {
+            onSuccess(result.matched_user);
+          } else {
+            onSuccess(result.user); // fallback
+          }
+          // Close modal immediately
+          onClose();
+        }
+      } else {
+        setError(result.message || 'Có lỗi xảy ra');
+      }
+    } catch (err: any) {
+      console.error('❌ Face auth error:', err);
+      
+      let errorMessage = 'Có lỗi xảy ra khi xác thực khuôn mặt';
+      
+      if (err.response) {
+        // Axios error
+        const errorData = err.response.data;
+        errorMessage = errorData?.detail || errorData?.message || errorMessage;
+      } else if (err.message) {
+        // Fetch error hoặc other error
+        errorMessage = err.message;
+      }
+      
+      // Xử lý các lỗi cụ thể
+      if (errorMessage.includes('Không phát hiện được khuôn mặt')) {
+        errorMessage = 'Không phát hiện được khuôn mặt trong ảnh. Vui lòng chụp lại với khuôn mặt rõ ràng.';
+      } else if (errorMessage.includes('nhiều hơn 1 khuôn mặt')) {
+        errorMessage = 'Phát hiện nhiều khuôn mặt. Vui lòng chụp lại chỉ có 1 khuôn mặt.';
+      } else if (errorMessage.includes('Không tìm thấy khuôn mặt phù hợp')) {
+        errorMessage = 'Khuôn mặt không khớp với tài khoản nào. Vui lòng thử lại hoặc đăng ký mới.';
+      } else if (errorMessage.includes('Dữ liệu ảnh không hợp lệ')) {
+        errorMessage = 'Ảnh không hợp lệ. Vui lòng chụp lại.';
+      } else if (errorMessage.includes('Ảnh quá nhỏ')) {
+        errorMessage = 'Ảnh quá nhỏ hoặc chất lượng kém. Vui lòng chụp lại với chất lượng tốt hơn.';
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCapture = async () => {
+    if (isCapturing || isProcessing) return;
+
+    setIsCapturing(true);
+    const imageData = capturePhoto();
+    
+    if (imageData) {
+      await processFaceAuth(imageData);
+    }
+    
+    // Reset capturing state immediately
+    setIsCapturing(false);
+  };
+
+  const handleClose = () => {
+    stopCamera();
+    setError(null);
+    setSuccess(null);
+    onClose();
+  };
+
+  // Start camera when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+
+    return () => {
+      stopCamera();
+    };
+  }, [isOpen]); // Only depend on isOpen
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4" style={{
+        // Tối ưu performance cho modal
+        willChange: 'transform',
+        backfaceVisibility: 'hidden',
+        transform: 'translateZ(0)'
+      }}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">
+            {mode === 'register' ? 'Đăng ký/Cập nhật khuôn mặt' : 'Xác thực khuôn mặt'}
+          </h3>
+          <button
+            onClick={handleClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Camera Preview */}
+          <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="w-full h-80 object-cover"
+          style={{
+            transform: 'scaleX(-1)', // Mirror effect
+            filter: 'brightness(1.1) contrast(1.1) saturate(1.1)', // Better visibility
+            objectFit: 'cover',
+            // Thêm CSS để giảm giật
+            imageRendering: 'auto',
+            backfaceVisibility: 'hidden',
+            perspective: '1000px',
+            transformStyle: 'preserve-3d'
+          }}
+          // Thêm attributes để tối ưu performance
+          preload="auto"
+          webkit-playsinline="true"
+        />
+            <canvas
+              ref={canvasRef}
+              className="hidden"
+            />
+            
+            {/* Overlay for face detection */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-56 h-56 border-3 border-white border-dashed rounded-full opacity-70 shadow-lg">
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-white text-sm font-medium">
+                  Đặt khuôn mặt trong khung này
+                </div>
+              </div>
+            </div>
+            
+            {/* Status indicator */}
+            {stream && (
+              <div className="absolute top-4 right-4 bg-green-500 text-white px-2 py-1 rounded-full text-xs">
+                📹 Camera đang hoạt động
+              </div>
+            )}
+          </div>
+
+          {/* Instructions */}
+          <div className="text-sm text-gray-600 text-center">
+            {mode === 'register' ? (
+              <p>Đặt khuôn mặt trong khung tròn và nhấn chụp ảnh để đăng ký/cập nhật</p>
+            ) : (
+              <p>Nhìn vào camera và nhấn chụp ảnh để xác thực</p>
+            )}
+          </div>
+
+          {/* Status Messages */}
+          {error && (
+            <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-lg">
+              <AlertCircle className="w-5 h-5" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="flex items-center space-x-2 text-green-600 bg-green-50 p-3 rounded-lg">
+              <CheckCircle className="w-5 h-5" />
+              <span className="text-sm">{success}</span>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex space-x-3">
+            <button
+              onClick={handleCapture}
+              disabled={isCapturing || isProcessing || !stream}
+              className="flex-1 flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {isCapturing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Đang chụp...</span>
+                </>
+              ) : isProcessing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Đang xử lý...</span>
+                </>
+              ) : (
+                <>
+                  <Camera className="w-4 h-4" />
+                  <span>{isCapturing ? 'Đang chụp...' : 'Chụp ảnh'}</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleClose}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            >
+              Hủy
+            </button>
+          </div>
+
+          {/* Tips */}
+          <div className="text-xs text-gray-500 space-y-1">
+            <p>💡 Mẹo:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Đảm bảo ánh sáng đủ</li>
+              <li>Nhìn thẳng vào camera</li>
+              <li>Giữ khuôn mặt trong khung tròn</li>
+              <li>Tránh đeo kính râm hoặc khẩu trang</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default FaceAuthModal;

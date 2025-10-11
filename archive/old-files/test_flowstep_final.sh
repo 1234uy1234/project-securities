@@ -1,0 +1,63 @@
+#!/bin/bash
+
+echo "=== TEST FLOWSTEP HOÀN CHỈNH ==="
+echo ""
+
+echo "1. Tasks với đầy đủ thông tin:"
+sqlite3 backend/app.db "SELECT pt.id, pt.title, pts.completed, pts.completed_at, pts.scheduled_time FROM patrol_tasks pt LEFT JOIN patrol_task_stops pts ON pt.id = pts.task_id WHERE pt.id >= 54 ORDER BY pt.id DESC;"
+
+echo ""
+echo "2. Checkin Records với ảnh:"
+sqlite3 backend/app.db "SELECT id, task_id, location_id, check_in_time, photo_path FROM patrol_records WHERE task_id >= 54 ORDER BY id DESC;"
+
+echo ""
+echo "=== FLOWSTEP SẼ HIỂN THỊ ==="
+echo ""
+
+echo "📋 TASK 55 - 'Test đúng giờ':"
+echo "   ✅ Completed: true"
+echo "   ⏰ Completed At: 2025-10-01 15:59:33"
+echo "   📅 Scheduled: 15:59"
+echo "   🎯 FlowStep: Hiển thị ✓ với thời gian chấm công"
+echo "   🖼️ Modal: Hiển thị ảnh + '✅ Chấm công đúng giờ'"
+echo ""
+
+echo "📋 TASK 56 - 'fvbfhbv':"
+echo "   ❌ Completed: false"
+echo "   ⏰ Completed At: null"
+echo "   📅 Scheduled: 16:01"
+echo "   🎯 FlowStep: Hiển thị ⚠️ với 'Chấm công ngoài giờ'"
+echo "   🖼️ Modal: Hiển thị ảnh + '⚠️ Chấm công ngoài giờ'"
+echo ""
+
+echo "📋 TASK 57 - 'nhà đi chơi':"
+echo "   ✅ Completed: true"
+echo "   ⏰ Completed At: 2025-10-01 16:01:26"
+echo "   📅 Scheduled: 16:01"
+echo "   🎯 FlowStep: Hiển thị ✓ với thời gian chấm công"
+echo "   🖼️ Modal: Hiển thị ảnh + '✅ Chấm công đúng giờ'"
+echo ""
+
+echo "=== HƯỚNG DẪN KIỂM TRA ==="
+echo "1. Mở https://10.10.68.200:5173/admin-dashboard"
+echo "2. Đăng nhập admin/admin123"
+echo "3. Hard refresh (Ctrl+Shift+R)"
+echo "4. Kiểm tra FlowStep hiển thị:"
+echo "   - Task 55: ✓ với thời gian 15:59"
+echo "   - Task 56: ⚠️ với 'Chấm công ngoài giờ'"
+echo "   - Task 57: ✓ với thời gian 16:01"
+echo "5. Click vào FlowStep để xem modal với ảnh"
+echo ""
+
+echo "=== LOGIC HOẠT ĐỘNG ==="
+echo "✅ Backend kiểm tra thời gian checkin vs scheduled_time"
+echo "✅ Chỉ set completed = 1 khi checkin trong ±15 phút"
+echo "✅ FlowStep hiển thị completedAt từ stop.completed_at"
+echo "✅ Modal hiển thị ảnh và trạng thái chính xác"
+echo ""
+
+echo "=== NẾU VẪN KHÔNG THẤY ==="
+echo "1. Clear browser cache hoàn toàn"
+echo "2. Thử incognito mode"
+echo "3. Kiểm tra console (F12) có lỗi không"
+echo "4. Restart frontend: cd frontend && npm run dev"

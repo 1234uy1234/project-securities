@@ -1,0 +1,56 @@
+[
+  {
+    "id": 2,
+    "content": "test",
+    "qr_type": "static",
+    "location": null,
+    "created_at": "2025-09-30T09:00:02.781516",
+    "created_by": "admin",
+    "is_active": 1
+  },
+  {
+    "id": 3,
+    "content": "test from frontend",
+    "qr_type": "static",
+    "location": null,
+    "created_at": "2025-09-30T09:00:37.828326",
+    "created_by": "admin",
+    "is_active": 1
+  },
+  {
+    "id": 4,
+    "content": "nhà xe",
+    "qr_type": "static",
+    "location": null,
+    "created_at": "2025-09-30T09:06:24.995331",
+    "created_by": "admin",
+    "is_active": 1
+  },
+  {
+    "id": 5,
+    "content": "abcd",
+    "qr_type": "static",
+    "location": null,
+    "created_at": "2025-09-30T09:30:57.102200",
+    "created_by": "admin",
+    "is_active": 1
+  },
+  {
+    "id": 6,
+    "content": "nhà đi chơi",
+    "qr_type": "static",
+    "location": null,
+    "created_at": "2025-09-30T09:56:29.722636",
+    "created_by": "admin",
+    "is_active": 1
+  },
+  {
+    "id": 8,
+    "content": "Test QR Code",
+    "qr_type": "static",
+    "location": "Test Location",
+    "created_at": "2025-10-01 09:37:20.667527+07:00",
+    "created_by": "admin",
+    "is_active": 1
+  }
+]

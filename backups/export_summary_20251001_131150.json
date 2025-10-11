@@ -1,0 +1,12 @@
+{
+  "export_date": "2025-10-01T13:11:50.160315",
+  "tables_exported": 6,
+  "files": [
+    "users_20251001_131150.json",
+    "locations_20251001_131150.json",
+    "qr_codes_20251001_131150.json",
+    "patrol_tasks_20251001_131150.json",
+    "patrol_records_20251001_131150.json",
+    "patrol_task_stops_20251001_131150.json"
+  ]
+}

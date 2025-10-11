@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Token Fix</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            padding: 20px; 
+            background-color: #f0f0f0; 
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button { 
+            padding: 10px 20px; 
+            margin: 5px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 5px; 
+            font-size: 14px;
+        }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .log { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            font-family: monospace; 
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Test Token Fix</h1>
+        <p>Script để test và sửa lỗi token authentication</p>
+        
+        <div>
+            <button class="btn-primary" onclick="testLogin()">🔐 Test Login</button>
+            <button class="btn-success" onclick="testCheckin()">📝 Test Checkin</button>
+            <button class="btn-warning" onclick="checkToken()">🔍 Check Token</button>
+            <button class="btn-danger" onclick="clearAll()">🗑️ Clear All</button>
+        </div>
+        
+        <div id="log" class="log">Ready to test...</div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://semiprivate-interlamellar-phillis.ngrok-free.dev/api';
+        let currentToken = null;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            logDiv.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        async function testLogin() {
+            log('🔐 Testing login...');
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentToken = data.access_token;
+                    localStorage.setItem('access_token', currentToken);
+                    localStorage.setItem('user_data', JSON.stringify(data.user));
+                    log(`✅ Login successful! Token: ${currentToken.substring(0, 20)}...`, 'success');
+                } else {
+                    log(`❌ Login failed: ${response.status} - ${await response.text()}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testCheckin() {
+            if (!currentToken) {
+                log('⚠️ No token available. Please login first.', 'warning');
+                return;
+            }
+            
+            log('📝 Testing checkin...');
+            try {
+                const response = await fetch(`${API_BASE}/patrol-records/checkin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`,
+                        'ngrok-skip-browser-warning': 'true'
+                    },
+                    body: JSON.stringify({
+                        qr_code: 'test_qr_' + Date.now(),
+                        location_id: 1,
+                        notes: 'Test checkin from token fix script',
+                        latitude: 10.0,
+                        longitude: 10.0,
+                        photo: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k='
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Checkin successful! Record ID: ${data.record_id}`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ Checkin failed: ${response.status} - ${errorText}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Checkin error: ${error.message}`, 'error');
+            }
+        }
+        
+        function checkToken() {
+            const localToken = localStorage.getItem('access_token');
+            const userData = localStorage.getItem('user_data');
+            
+            log('🔍 Checking token status...');
+            log(`Local token: ${localToken ? localToken.substring(0, 20) + '...' : 'None'}`);
+            log(`User data: ${userData ? 'Present' : 'None'}`);
+            log(`Current token: ${currentToken ? currentToken.substring(0, 20) + '...' : 'None'}`);
+            
+            if (localToken) {
+                log('✅ Token found in localStorage', 'success');
+            } else {
+                log('❌ No token in localStorage', 'error');
+            }
+        }
+        
+        function clearAll() {
+            localStorage.clear();
+            currentToken = null;
+            log('🗑️ All data cleared', 'warning');
+        }
+        
+        // Auto-check token on load
+        window.onload = function() {
+            checkToken();
+        };
+    </script>
+</body>
+</html>

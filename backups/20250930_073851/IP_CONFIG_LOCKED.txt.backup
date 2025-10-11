@@ -1,0 +1,43 @@
+🔒 CẤU HÌNH IP TĨNH - KHÓA VĨNH VIỄN
+=====================================
+
+IP CỐ ĐỊNH: 10.10.68.15
+NGÀY TẠO: $(date)
+TRẠNG THÁI: ĐÃ KHÓA - KHÔNG THAY ĐỔI
+
+📋 DANH SÁCH FILE ĐÃ CỐ ĐỊNH IP:
+================================
+
+1. start-https-final.sh
+   - Dòng 14: CURRENT_IP="10.10.68.15"
+   - Đã thay thế lệnh lấy IP động bằng IP cố định
+
+2. nginx-https.conf
+   - Dòng 53: server 10.10.68.15:8000;
+   - Dòng 60: server_name 10.10.68.15 localhost;
+   - Dòng 75: server_name 10.10.68.15 localhost;
+
+3. frontend/src/utils/api.ts
+   - Dòng 5: baseURL: 'https://10.10.68.15/api'
+
+4. start-with-fixed-ip.sh (BACKUP SCRIPT)
+   - Dòng 6: FIXED_IP="10.10.68.15"
+   - Script backup với IP cố định 100%
+
+5. check-ip-config.sh
+   - Script kiểm tra IP cố định
+
+⚠️  CẢNH BÁO:
+=============
+- IP 10.10.68.15 đã được cố định VĨNH VIỄN
+- KHÔNG BAO GIỜ thay đổi IP này
+- Nếu cần thay đổi, phải sửa TẤT CẢ file trên
+- Sử dụng script start-with-fixed-ip.sh để khởi động
+
+🎯 CÁCH SỬ DỤNG:
+===============
+1. Khởi động: ./start-with-fixed-ip.sh
+2. Kiểm tra: ./check-ip-config.sh
+3. Truy cập: https://localhost:5173
+
+✅ ĐẢM BẢO 100% IP KHÔNG THAY ĐỔI!

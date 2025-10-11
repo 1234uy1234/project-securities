@@ -1,0 +1,994 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+from datetime import datetime, timezone, timedelta
+from ..database import get_db
+from ..auth import get_current_user, require_manager_or_admin
+from ..models import PatrolTask, User, UserRole, TaskStatus, Location
+from ..schemas import PatrolTaskCreate, PatrolTaskUpdate, PatrolTask as PatrolTaskSchema
+from ..auth import get_password_hash
+
+router = APIRouter(prefix="/patrol-tasks", tags=["patrol tasks"])
+
+# Simple notification endpoints
+@router.get('/notifications')
+async def get_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from ..models import Notification
+    notifs = db.query(Notification).filter(Notification.user_id == current_user.id).order_by(Notification.created_at.desc()).all()
+    return [
+        {"id": n.id, "title": n.title, "message": n.message, "is_read": n.is_read, "created_at": n.created_at}
+        for n in notifs
+    ]
+
+@router.put('/notifications/{notif_id}/read')
+async def mark_notification_read(
+    notif_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from ..models import Notification
+    n = db.query(Notification).filter(Notification.id == notif_id, Notification.user_id == current_user.id).first()
+    if not n:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+    n.is_read = True
+    db.commit()
+    return {"ok": True}
+
+# Giờ Việt Nam (UTC+7)
+def get_vietnam_time() -> datetime:
+    vietnam_tz = timezone(timedelta(hours=7))
+    return datetime.now(vietnam_tz)
+
+
+def cancel_expired_tasks(db: Session):
+    """Mark tasks whose end_time passed as CANCELLED (if not already completed/cancelled)."""
+    try:
+        now = get_vietnam_time()
+        expired = db.query(PatrolTask).filter(
+            PatrolTask.end_time != None,
+            PatrolTask.end_time < now,
+            PatrolTask.status != TaskStatus.COMPLETED,
+            PatrolTask.status != TaskStatus.CANCELLED,
+        ).all()
+        if not expired:
+            return
+        for t in expired:
+            t.status = TaskStatus.CANCELLED
+            t.updated_at = now
+            db.add(t)
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+@router.get("/created-by/me")
+async def get_tasks_created_by_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Danh sách nhiệm vụ do người dùng hiện tại tạo ra (admin/manager)."""
+    from sqlalchemy.orm import joinedload
+
+    # Cancel expired tasks first so listing reflects real state
+    cancel_expired_tasks(db)
+
+    # Chỉ cho admin/manager; nếu employee gọi thì trả về rỗng
+    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
+        return []
+
+    tasks = db.query(PatrolTask).options(
+        joinedload(PatrolTask.location),
+        joinedload(PatrolTask.assignee)
+    ).filter(PatrolTask.created_by == current_user.id).order_by(PatrolTask.id.desc()).all()
+
+    result = []
+    for task in tasks:
+        result.append({
+            "id": task.id,
+            "title": task.title,
+            "description": task.description,
+            "status": task.status,
+            "schedule_week": task.schedule_week,
+            "created_at": task.created_at,
+            "location_id": task.location_id,
+            "assigned_to": task.assigned_to,
+            "location_name": task.location.name if task.location else str(task.location_id),
+            "assigned_user_name": task.assignee.full_name if task.assignee else str(task.assigned_to)
+        })
+
+    return result
+
+@router.get("/test")
+async def test_tasks(
+    db: Session = Depends(get_db)
+):
+    """Test endpoint để debug tasks"""
+    try:
+        # Test query đơn giản với raw SQL
+        from sqlalchemy import text
+        result = db.execute(text("SELECT id, title, status, assigned_to, created_by FROM patrol_tasks")).fetchall()
+        tasks = []
+        for row in result:
+            tasks.append({
+                "id": row[0],
+                "title": row[1],
+                "status": row[2],
+                "assigned_to": row[3],
+                "created_by": row[4]
+            })
+        return {"count": len(tasks), "tasks": tasks}
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/")
+async def get_patrol_tasks(
+    skip: int = 0,
+    limit: int = 100,
+    week: str = None,
+    status: str = None,
+    location_id: int = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Query đơn giản - TEST TRỰC TIẾP
+        print(f"🔍 DEBUG: User role: {current_user.role}")
+        print(f"🔍 DEBUG: User ID: {current_user.id}")
+        
+        # Test query đơn giản trước
+        all_tasks = db.query(PatrolTask).all()
+        print(f"🔍 DEBUG: Total tasks in DB: {len(all_tasks)}")
+        
+        # Query đơn giản
+        query = db.query(PatrolTask)
+        
+        # Filter by week if provided
+        if week:
+            query = query.filter(PatrolTask.schedule_week == week)
+        
+        # Filter by status if provided
+        if status:
+            query = query.filter(PatrolTask.status == status)
+        
+        # Filter by location if provided
+        if location_id:
+            query = query.filter(PatrolTask.location_id == location_id)
+        
+        # Employees can only see their own tasks
+        if current_user.role == UserRole.EMPLOYEE:
+            query = query.filter(PatrolTask.assigned_to == current_user.id)
+        
+        # Execute query
+        print(f"🔍 DEBUG: Query before execution: {query}")
+        tasks = query.offset(skip).limit(limit).all()
+        print(f"🔍 DEBUG: Found {len(tasks)} tasks")
+        
+        # Format response với stops data
+        result = []
+        for task in tasks:
+            # Get assigned user info
+            assigned_user = db.query(User).filter(User.id == task.assigned_to).first()
+            # Lấy stops data
+            # from ..models import PatrolTaskStop, PatrolRecord, Location as LocModel  # Comment out PatrolTaskStop
+            from ..models import PatrolRecord, Location as LocModel
+            stops_q = db.query(PatrolTaskStop).filter(PatrolTaskStop.task_id == task.id).order_by(PatrolTaskStop.sequence.asc()).all()
+            
+            # visited records for this task (compatible with old database)
+            visited_records = []
+            try:
+                visited_records = db.query(PatrolRecord).filter(PatrolRecord.task_id == task.id).all()
+            except Exception:
+                # Old database doesn't have task_id column
+                pass
+            visited_map = {}
+            for r in visited_records:
+                if r.location_id not in visited_map or (r.check_in_time and r.check_in_time < visited_map[r.location_id]):
+                    visited_map[r.location_id] = r.check_in_time
+
+            stops_list = []
+            for s in stops_q:
+                loc = db.query(LocModel).filter(LocModel.id == s.location_id).first()
+                stops_list.append({
+                    "location_id": s.location_id,
+                    "location_name": loc.name if loc else f"Location {s.location_id}",
+                    "sequence": s.sequence,
+                    "required": bool(s.required),
+                    "scheduled_time": s.scheduled_time.strftime('%H:%M') if s.scheduled_time else None,
+                    "visited": s.location_id in visited_map,
+                    "visited_at": visited_map.get(s.location_id).isoformat() if visited_map.get(s.location_id) else None
+                })
+
+            task_dict = {
+                "id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "status": task.status,
+                "schedule_week": task.schedule_week,
+                "created_at": task.created_at,
+                "location_id": task.location_id,
+                "assigned_to": task.assigned_to,
+                "location_name": f"Location {task.location_id}",
+                "assigned_user_name": assigned_user.full_name if assigned_user else f"User {task.assigned_to}",
+                "stops": stops_list
+            }
+            result.append(task_dict)
+        
+        return result
+    except Exception as e:
+        print(f"Error in get_patrol_tasks: {e}")
+        return []
+
+@router.get("/my-tasks")
+async def get_my_tasks(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get tasks assigned to current user"""
+    from sqlalchemy.orm import joinedload
+    
+    # Cancel expired tasks for accurate user view
+    cancel_expired_tasks(db)
+
+    tasks = db.query(PatrolTask).options(
+        joinedload(PatrolTask.location),
+        joinedload(PatrolTask.assignee)
+    ).filter(PatrolTask.assigned_to == current_user.id).all()
+    
+    # Format response with location and user names, including stops
+    result = []
+    for task in tasks:
+        # Build stops info (ordered) and visited map
+        from ..models import PatrolTaskStop, PatrolRecord, Location as LocModel
+        stops_q = db.query(PatrolTaskStop).filter(PatrolTaskStop.task_id == task.id).order_by(PatrolTaskStop.sequence.asc()).all()
+        # visited records for this task (compatible with old database)
+        visited_records = []
+        try:
+            visited_records = db.query(PatrolRecord).filter(PatrolRecord.task_id == task.id).all()
+        except Exception:
+            # Old database doesn't have task_id column
+            pass
+        visited_map = {}
+        for r in visited_records:
+            if r.location_id not in visited_map or (r.check_in_time and r.check_in_time < visited_map[r.location_id]):
+                visited_map[r.location_id] = r.check_in_time
+
+        stops_list = []
+        for s in stops_q:
+            loc = db.query(LocModel).filter(LocModel.id == s.location_id).first()
+            stops_list.append({
+                "location_id": s.location_id,
+                "location_name": loc.name if loc else f"Location {s.location_id}",
+                "sequence": s.sequence,
+                "required": bool(s.required),
+                "scheduled_time": s.scheduled_time.strftime('%H:%M') if s.scheduled_time else None,
+                "visited": s.location_id in visited_map,
+                "visited_at": visited_map.get(s.location_id).isoformat() if visited_map.get(s.location_id) else None
+            })
+
+        task_dict = {
+            "id": task.id,
+            "title": task.title,
+            "description": task.description,
+            "status": task.status,
+            "schedule_week": task.schedule_week,
+            "created_at": task.created_at,
+            "location_id": task.location_id,
+            "assigned_to": task.assigned_to,
+            "location_name": task.location.name if task.location else str(task.location_id),
+            "assigned_user_name": task.assignee.full_name if task.assignee else str(task.assigned_to)
+        }
+        if stops_list:
+            task_dict['stops'] = stops_list
+        
+        result.append(task_dict)
+    
+    return result
+
+@router.get("/user/{user_id}/new-tasks")
+async def get_user_new_tasks(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get new tasks for a specific user (created in last 24 hours)"""
+    # Only admin and manager can check other users' tasks
+    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER] and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view other users' tasks")
+    
+    # Get tasks created in last 24 hours
+    from datetime import timedelta
+    from sqlalchemy.orm import joinedload
+    
+    yesterday = get_vietnam_time() - timedelta(days=1)
+    
+    # Cancel expired tasks before filtering
+    cancel_expired_tasks(db)
+
+    tasks = db.query(PatrolTask).options(
+        joinedload(PatrolTask.location),
+        joinedload(PatrolTask.assignee)
+    ).filter(
+        PatrolTask.assigned_to == user_id,
+        PatrolTask.created_at >= yesterday
+    ).all()
+    
+    # Format response with location and user names
+    result = []
+    for task in tasks:
+        task_dict = {
+            "id": task.id,
+            "title": task.title,
+            "description": task.description,
+            "status": task.status,
+            "schedule_week": task.schedule_week,
+            "created_at": task.created_at,
+            "location_id": task.location_id,
+            "assigned_to": task.assigned_to,
+            "location_name": task.location.name if task.location else str(task.location_id),
+            "assigned_user_name": task.assignee.full_name if task.assignee else str(task.assigned_to)
+        }
+        result.append(task_dict)
+    
+    return result
+
+@router.get("/{task_id}")
+async def get_patrol_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Ensure expired tasks are cancelled so single-task view is accurate
+    cancel_expired_tasks(db)
+
+    task = db.query(PatrolTask).filter(PatrolTask.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patrol task not found"
+        )
+    
+    # Employees can only see their own tasks
+    if current_user.role == UserRole.EMPLOYEE and task.assigned_to != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Build stops info like in list endpoint
+    from ..models import PatrolTaskStop, PatrolRecord, Location as LocModel
+    stops_q = db.query(PatrolTaskStop).filter(PatrolTaskStop.task_id == task.id).order_by(PatrolTaskStop.sequence.asc()).all()
+    # visited records for this task (compatible with old database)
+    visited_records = []
+    try:
+        visited_records = db.query(PatrolRecord).filter(PatrolRecord.task_id == task.id).all()
+    except Exception:
+        # Old database doesn't have task_id column
+        pass
+    visited_map = {}
+    for r in visited_records:
+        if r.location_id not in visited_map or (r.check_in_time and r.check_in_time < visited_map[r.location_id]):
+            visited_map[r.location_id] = r.check_in_time
+
+    stops_list = []
+    for s in stops_q:
+        loc = db.query(LocModel).filter(LocModel.id == s.location_id).first()
+        stops_list.append({
+            "location_id": s.location_id,
+            "location_name": loc.name if loc else f"Location {s.location_id}",
+            "sequence": s.sequence,
+            "required": bool(s.required),
+            "visited": s.location_id in visited_map,
+            "visited_at": visited_map.get(s.location_id).isoformat() if visited_map.get(s.location_id) else None
+        })
+
+    task_dict = {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "status": task.status,
+        "schedule_week": task.schedule_week,
+        "created_at": task.created_at,
+        "location_id": task.location_id,
+        "assigned_to": task.assigned_to,
+        "location_name": task.location.name if task.location else str(task.location_id),
+        "assigned_user_name": task.assignee.full_name if task.assignee else str(task.assigned_to)
+    }
+    if stops_list:
+        task_dict['stops'] = stops_list
+    
+    return task_dict
+
+@router.post("/")
+async def create_patrol_task(
+    task_data: PatrolTaskCreate,
+    current_user: User = Depends(require_manager_or_admin()),
+    db: Session = Depends(get_db)
+):
+    try:
+        # ĐƠN GIẢN HÓA: Luôn tạo location mới từ tên
+        from ..models import Location, Notification
+        location = None
+        location_id = None
+
+        # Tạo location mới với tên từ location_id
+        location_name = str(task_data.location_id).strip() if task_data.location_id else "Vị trí mặc định"
+        
+        print(f"🔍 CREATE TASK: Creating location with name='{location_name}'")
+        
+        import uuid
+        location = Location(
+            name=location_name,
+            description=f"Location created for task: {task_data.title}",
+            qr_code=f"patrol://location/{uuid.uuid4().hex[:8]}",
+            address=location_name,
+            gps_latitude=0.0,
+            gps_longitude=0.0
+        )
+        db.add(location)
+        db.flush()
+        location_id = location.id
+        
+        print(f"✅ CREATE TASK: Created location ID={location_id}, name='{location_name}'")
+
+        # Handle assigned user - accept numeric id or string name
+        assigned_user = None
+        # If it's an integer ID (or string numeric), resolve by id
+        try:
+            aid = int(task_data.assigned_to)
+        except Exception:
+            aid = None
+
+        if aid is not None:
+            assigned_user = db.query(User).filter(User.id == aid).first()
+        else:
+            # Treat as username/full name and try to find or create
+            if isinstance(task_data.assigned_to, str) and task_data.assigned_to.strip():
+                search_term = task_data.assigned_to.strip()
+                assigned_user = db.query(User).filter(
+                    (User.username == search_term) | (User.full_name == search_term)
+                ).first()
+                if not assigned_user:
+                    # Create new employee user with a safe username
+                    uname = search_term.lower().replace(' ', '_')[:40]
+                    # Hash a default password instead of storing plaintext
+                    pwd_hash = get_password_hash("admin123")
+                    assigned_user = User(
+                        username=uname,
+                        email=f"{uname}@manhtoan.com",
+                        full_name=search_term,
+                        role=UserRole.EMPLOYEE.value,
+                        is_active=True,
+                        phone="",
+                        password_hash=pwd_hash
+                    )
+                    db.add(assigned_user)
+                    db.flush()
+
+        if not assigned_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid assigned user"
+            )
+
+        # Normalize role comparison (role may be stored as string)
+        current_role = str(assigned_user.role)
+        if current_role not in [UserRole.EMPLOYEE.value, UserRole.ADMIN.value, UserRole.MANAGER.value]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Can only assign tasks to employees, managers, or admins"
+            )
+
+        # Get stops data before creating task
+        stops_data = getattr(task_data, 'stops', None)
+        
+        # Create task with proper IDs (exclude stops from task data)
+        task_dict = task_data.dict(exclude={'stops'})
+        task_dict['location_id'] = location_id
+        task_dict['assigned_to'] = assigned_user.id
+        
+        # Convert schedule_week dict to JSON string for database
+        if isinstance(task_dict.get('schedule_week'), dict):
+            import json
+            task_dict['schedule_week'] = json.dumps(task_dict['schedule_week'])
+
+        db_task = PatrolTask(
+            **task_dict,
+            created_by=current_user.id
+        )
+
+        db.add(db_task)
+        db.commit()
+        db.refresh(db_task)
+
+        # ĐƠN GIẢN HÓA: Xử lý stops theo tên QR code
+        stops = stops_data
+        print(f"🔍 CREATE TASK: Received stops data: {stops}")
+        if stops:
+            from ..models import PatrolTaskStop
+            from datetime import time
+            seq = 1
+            for stop_item in stops:
+                print(f"🔍 CREATE TASK: Processing stop item: {stop_item}")
+                try:
+                    scheduled_time = None
+                    required = True
+                    
+                    # Xử lý cả dict và Pydantic model
+                    if isinstance(stop_item, dict):
+                        qr_code_name = stop_item.get('qr_code_name', '').strip()
+                        scheduled_time_str = stop_item.get('scheduled_time', '').strip()
+                        required = stop_item.get('required', True)
+                    else:
+                        # Pydantic model
+                        qr_code_name = getattr(stop_item, 'qr_code_name', '').strip() if hasattr(stop_item, 'qr_code_name') else ''
+                        scheduled_time_str = getattr(stop_item, 'scheduled_time', '').strip() if hasattr(stop_item, 'scheduled_time') else ''
+                        required = getattr(stop_item, 'required', True) if hasattr(stop_item, 'required') else True
+                    
+                    print(f"🔍 CREATE TASK: Stop details - qr_code_name='{qr_code_name}', scheduled_time='{scheduled_time_str}'")
+                    
+                    if not qr_code_name:
+                        print(f"⚠️ CREATE TASK: Skip stop - no qr_code_name")
+                        continue
+                    
+                    # Đơn giản hóa: Parse scheduled_time
+                    if scheduled_time_str and scheduled_time_str.strip():
+                        try:
+                            hour, minute = map(int, scheduled_time_str.split(':'))
+                            scheduled_time = time(hour, minute)
+                            print(f"✅ CREATE TASK: Parsed scheduled_time: {scheduled_time}")
+                        except Exception as e:
+                            print(f"⚠️ CREATE TASK: Error parsing scheduled_time '{scheduled_time_str}': {e}")
+                            scheduled_time = None
+                    else:
+                        scheduled_time = None
+                    
+                    # Đơn giản hóa: Luôn tạo location mới với tên QR code
+                    import uuid
+                    new_location = Location(
+                        name=qr_code_name,
+                        description=f"Location created for task: {task_data.title}",
+                        qr_code=f"patrol://location/{uuid.uuid4().hex[:8]}",
+                        address=qr_code_name,
+                        gps_latitude=0.0,
+                        gps_longitude=0.0
+                    )
+                    db.add(new_location)
+                    db.flush()
+                    lid_int = new_location.id
+                    
+                    print(f"✅ CREATE TASK: Created stop location ID={lid_int}, name='{qr_code_name}'")
+                    
+                    # Tạo stop record
+                    stop = PatrolTaskStop(
+                        task_id=db_task.id, 
+                        location_id=lid_int, 
+                        sequence=seq, 
+                        required=required,
+                        scheduled_time=scheduled_time
+                    )
+                    db.add(stop)
+                    seq += 1
+                    print(f"✅ CREATE TASK: Created stop record sequence={seq-1}")
+                    
+                except Exception as e:
+                    print(f"❌ CREATE TASK: Error creating stop for {stop_item}: {e}")
+                    continue
+            db.commit()
+            db.refresh(db_task)
+            print(f"✅ CREATE TASK: Created {seq-1} stops for task ID={db_task.id}")
+        # Return task with stops in the same format as get endpoints
+        from ..models import PatrolTaskStop, Location as LocModel
+        stops_q = db.query(PatrolTaskStop).filter(PatrolTaskStop.task_id == db_task.id).order_by(PatrolTaskStop.sequence.asc()).all()
+        
+        stops_list = []
+        for s in stops_q:
+            loc = db.query(LocModel).filter(LocModel.id == s.location_id).first()
+            print(f"Stop data: location_id={s.location_id}, location_name={loc.name if loc else 'Unknown'}, scheduled_time={s.scheduled_time}")
+            stops_list.append({
+                "location_id": s.location_id,
+                "location_name": loc.name if loc else f"Location {s.location_id}",
+                "sequence": s.sequence,
+                "required": bool(s.required),
+                "scheduled_time": s.scheduled_time.strftime('%H:%M') if s.scheduled_time else None,
+                "visited": False,  # New task, not visited yet
+                "visited_at": None
+            })
+
+        task_response = {
+            "id": db_task.id,
+            "title": db_task.title,
+            "description": db_task.description,
+            "status": db_task.status,
+            "schedule_week": db_task.schedule_week,
+            "created_at": db_task.created_at,
+            "location_id": db_task.location_id,
+            "assigned_to": db_task.assigned_to,
+            "location_name": location.name if location else str(db_task.location_id),
+            "assigned_user_name": assigned_user.full_name if assigned_user else str(db_task.assigned_to)
+        }
+        if stops_list:
+            task_response['stops'] = stops_list
+
+        # Create an in-app notification for the assigned user (simple table)
+        try:
+            notif = Notification(
+                user_id=assigned_user.id,
+                title=f"Nhiệm vụ mới: {db_task.title}",
+                message=f"Bạn có nhiệm vụ mới được giao: {db_task.title} tại {location.name if location else ''}",
+                is_read=False
+            )
+            db.add(notif)
+            db.commit()
+        except Exception:
+            # If notifications table doesn't exist or other error, do not fail task creation
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        return task_response
+    except HTTPException:
+        # Re-raise known HTTP exceptions
+        raise
+    except Exception as e:
+        # Rollback any pending transaction and return a clear error
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not create patrol task: " + str(e))
+
+@router.put("/{task_id}", response_model=PatrolTaskSchema)
+async def update_patrol_task(
+    task_id: int,
+    task_data: PatrolTaskUpdate,
+    current_user: User = Depends(require_manager_or_admin()),
+    db: Session = Depends(get_db)
+):
+    task = db.query(PatrolTask).filter(PatrolTask.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patrol task not found"
+        )
+    
+    # Update fields
+    update_data = task_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(task, field, value)
+    
+    task.updated_at = get_vietnam_time()
+    db.commit()
+    db.refresh(task)
+    return task
+
+@router.put("/{task_id}/stops/{stop_id}/schedule")
+async def update_stop_schedule(
+    task_id: int,
+    stop_id: int,
+    scheduled_time: str,
+    current_user: User = Depends(require_manager_or_admin()),
+    db: Session = Depends(get_db)
+):
+    """Cập nhật thời gian dự kiến cho một stop cụ thể"""
+    from ..models import PatrolTaskStop
+    from datetime import time
+    
+    # Kiểm tra task tồn tại
+    task = db.query(PatrolTask).filter(PatrolTask.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+    
+    # Kiểm tra stop tồn tại
+    stop = db.query(PatrolTaskStop).filter(
+        PatrolTaskStop.id == stop_id,
+        PatrolTaskStop.task_id == task_id
+    ).first()
+    if not stop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stop not found"
+        )
+    
+    # Parse thời gian
+    try:
+        hour, minute = map(int, scheduled_time.split(':'))
+        stop.scheduled_time = time(hour, minute)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid time format. Use HH:MM"
+        )
+    
+    db.commit()
+    return {"message": "Stop schedule updated successfully"}
+
+@router.get("/{task_id}/stops")
+async def get_task_stops(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lấy danh sách stops của task với ID"""
+    from ..models import PatrolTaskStop, Location
+    
+    # Kiểm tra task tồn tại
+    task = db.query(PatrolTask).filter(PatrolTask.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+    
+    # Lấy stops
+    stops = db.query(PatrolTaskStop).filter(
+        PatrolTaskStop.task_id == task_id
+    ).order_by(PatrolTaskStop.sequence.asc()).all()
+    
+    result = []
+    for stop in stops:
+        location = db.query(Location).filter(Location.id == stop.location_id).first()
+        result.append({
+            "stop_id": stop.id,
+            "location_id": stop.location_id,
+            "location_name": location.name if location else f"Location {stop.location_id}",
+            "sequence": stop.sequence,
+            "required": stop.required,
+            "scheduled_time": stop.scheduled_time.strftime('%H:%M') if stop.scheduled_time else None,
+        })
+    
+    return result
+
+@router.get("/{task_id}/completion-status")
+async def get_task_completion_status(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Kiểm tra trạng thái hoàn thành của nhiệm vụ"""
+    from ..models import PatrolRecord
+    
+    task = db.query(PatrolTask).filter(PatrolTask.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patrol task not found"
+        )
+    
+    # Kiểm tra quyền: Employee chỉ có thể xem nhiệm vụ của mình
+    if current_user.role == UserRole.EMPLOYEE and task.assigned_to != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn chỉ có thể xem nhiệm vụ được giao cho mình"
+        )
+    
+    # If task already completed, return
+    if task.status == TaskStatus.COMPLETED:
+        return {
+            "can_complete": False,
+            "is_completed": True,
+            "message": "Nhiệm vụ đã được hoàn thành",
+            "patrol_records_count": 0,
+            "completed_patrols": 0
+        }
+    
+    # Use task start/end time if provided, otherwise use created_at and now
+    now = get_vietnam_time()
+    task_start_time = task.start_time or task.created_at
+    task_end_time = task.end_time or now
+
+    # If task has expired and not completed, mark as cancelled
+    if task.end_time and now > task.end_time and task.status != TaskStatus.COMPLETED:
+        task.status = TaskStatus.CANCELLED
+        task.updated_at = now
+        db.commit()
+        return {
+            "can_complete": False,
+            "is_completed": False,
+            "message": "Nhiệm vụ đã hết hạn và được huỷ",
+            "patrol_records_count": 0,
+            "completed_patrols": 0
+        }
+    
+    # Tìm các bản ghi patrol trong khoảng thời gian nhiệm vụ
+    patrol_records = db.query(PatrolRecord).filter(
+        PatrolRecord.task_id == task_id,
+        PatrolRecord.user_id == task.assigned_to,
+        PatrolRecord.check_in_time >= task_start_time,
+        PatrolRecord.check_in_time <= task_end_time,
+    ).all()
+    
+    # Kiểm tra có ít nhất một lần check-in với ảnh
+    # Need check-in photo (không cần check_out_time)
+    completed_records = [record for record in patrol_records if record.check_in_time is not None and record.photo_url]
+    
+    # Require at least one record with both photos
+    can_complete = len(completed_records) > 0
+
+    # If task has defined stops, ensure all required stops have at least one record
+    from ..models import PatrolTaskStop
+    stops = db.query(PatrolTaskStop).filter(PatrolTaskStop.task_id == task_id, PatrolTaskStop.required == True).all()
+    if stops:
+        stop_location_ids = [s.location_id for s in stops]
+        visited_location_ids = list({r.location_id for r in patrol_records})
+        missing = [lid for lid in stop_location_ids if lid not in visited_location_ids]
+        if missing:
+            can_complete = False
+            message = f"Bạn cần quét các vị trí yêu cầu: {missing} trước khi hoàn thành nhiệm vụ"
+    
+    if not can_complete:
+        if len(patrol_records) == 0:
+            message = "Bạn cần quét QR và chụp ảnh ít nhất một lần để hoàn thành nhiệm vụ"
+        else:
+            message = "Bạn cần check-out (hoàn thành) ít nhất một lần sau khi check-in"
+    else:
+        message = "Nhiệm vụ có thể được hoàn thành"
+    
+    return {
+        "can_complete": can_complete,
+        "is_completed": can_complete,  # Nếu có thể complete thì đã completed
+        "message": message,
+        "patrol_records_count": len(patrol_records),
+        "completed_patrols": len(completed_records),
+        "requirements": {
+            "needs_qr_scan": len(patrol_records) == 0,
+            "needs_checkout": len(patrol_records) > 0 and len(completed_records) == 0
+        }
+    }
+
+@router.post("/{task_id}/complete")
+async def complete_patrol_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Đánh dấu nhiệm vụ hoàn thành với validation QR scan và ảnh"""
+    from ..models import PatrolRecord
+    
+    task = db.query(PatrolTask).filter(PatrolTask.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patrol task not found"
+        )
+    
+    # Kiểm tra quyền: Employee chỉ có thể hoàn thành nhiệm vụ của mình
+    if current_user.role == UserRole.EMPLOYEE and task.assigned_to != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn chỉ có thể hoàn thành nhiệm vụ được giao cho mình"
+        )
+    
+    # Kiểm tra nhiệm vụ đã hoàn thành chưa
+    if task.status == TaskStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nhiệm vụ đã được hoàn thành rồi"
+        )
+    
+    # Kiểm tra có ít nhất một lần quét QR và chụp ảnh trong khoảng thời gian nhiệm vụ
+    now = get_vietnam_time()
+    task_start_time = task.start_time or task.created_at
+    task_end_time = task.end_time or now
+
+    # If task expired, cannot complete
+    if task.end_time and now > task.end_time:
+        task.status = TaskStatus.CANCELLED
+        task.updated_at = now
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nhiệm vụ đã hết hạn và bị huỷ")
+    
+    # Tìm các bản ghi patrol trong khoảng thời gian nhiệm vụ
+    patrol_records = db.query(PatrolRecord).filter(
+        PatrolRecord.task_id == task_id,
+        PatrolRecord.user_id == task.assigned_to,
+        PatrolRecord.check_in_time >= task_start_time,
+        PatrolRecord.check_in_time <= task_end_time,
+    ).all()
+
+    # Require at least one record that has check-in photo (không cần check_out_time)
+    valid_completed = [r for r in patrol_records if r.check_in_time and r.photo_url]
+    if not valid_completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không thể hoàn thành nhiệm vụ! Bạn phải chụp ảnh check-in trong khoảng thời gian được giao để hoàn thành nhiệm vụ."
+        )
+    
+    # Đánh dấu nhiệm vụ hoàn thành
+    task.status = TaskStatus.COMPLETED
+    task.updated_at = get_vietnam_time()
+    db.commit()
+    db.refresh(task)
+    
+    return {
+        "message": f"✅ Nhiệm vụ '{task.title}' đã được hoàn thành thành công!",
+        "task_id": task.id,
+        "title": task.title,
+        "completed_at": task.updated_at.isoformat(),
+        "patrol_records_count": len(patrol_records),
+    "completed_patrols": len(valid_completed)
+    }
+
+@router.delete("/{task_id}")
+async def delete_patrol_task(
+    task_id: int,
+    current_user: User = Depends(require_manager_or_admin()),
+    db: Session = Depends(get_db)
+):
+    task = db.query(PatrolTask).filter(PatrolTask.id == task_id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patrol task not found"
+        )
+    
+    # Xóa tất cả records liên quan trước (compatible với old database)
+    from ..models import PatrolRecord, PatrolTaskStop
+    try:
+        records = db.query(PatrolRecord).filter(PatrolRecord.task_id == task_id).all()
+        for record in records:
+            db.delete(record)
+    except Exception:
+        # Old database không có task_id column
+        pass
+    
+    # Xóa tất cả stops liên quan
+    stops = db.query(PatrolTaskStop).filter(PatrolTaskStop.task_id == task_id).all()
+    for stop in stops:
+        db.delete(stop)
+    
+    # Sau đó xóa task
+    db.delete(task)
+    db.commit()
+    
+    return {"message": "Patrol task deleted successfully"}
+
+@router.get("/by-location/{location_id}")
+async def get_tasks_by_location(
+    location_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get active tasks for a specific location"""
+    from datetime import timedelta
+    
+    # Cancel expired tasks before returning location tasks
+    cancel_expired_tasks(db)
+
+    # Lấy nhiệm vụ đang hoạt động cho vị trí này
+    tasks = db.query(PatrolTask).filter(
+        PatrolTask.location_id == location_id,
+        PatrolTask.status.in_([TaskStatus.PENDING, TaskStatus.IN_PROGRESS])
+    ).all()
+    
+    # Lấy thông tin location
+    location = db.query(Location).filter(Location.id == location_id).first()
+    
+    return {
+        "location": {
+            "id": location.id if location else location_id,
+            "name": location.name if location else f"Vị trí {location_id}",
+            "description": location.description if location else None
+        },
+        "tasks": [
+            {
+                "id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "status": task.status,
+                "assigned_to": task.assigned_to,
+                "schedule_week": task.schedule_week,
+                "created_at": task.created_at
+            }
+            for task in tasks
+        ],
+        "current_time": datetime.now().isoformat()
+    }

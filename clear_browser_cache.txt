@@ -1,0 +1,20 @@
+HƯỚNG DẪN XÓA CACHE BROWSER:
+
+1. Chrome/Edge:
+   - Nhấn Ctrl+Shift+Delete (Windows) hoặc Cmd+Shift+Delete (Mac)
+   - Chọn "All time"
+   - Tick tất cả các mục
+   - Nhấn "Clear data"
+
+2. Firefox:
+   - Nhấn Ctrl+Shift+Delete (Windows) hoặc Cmd+Shift+Delete (Mac)
+   - Chọn "Everything"
+   - Tick tất cả các mục
+   - Nhấn "Clear Now"
+
+3. Hoặc dùng chế độ ẩn danh (Incognito/Private):
+   - Chrome: Ctrl+Shift+N
+   - Firefox: Ctrl+Shift+P
+   - Edge: Ctrl+Shift+N
+
+4. Hoặc mở tab mới và nhấn Ctrl+F5 để hard refresh

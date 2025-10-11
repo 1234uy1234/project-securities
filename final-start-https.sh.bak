@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Script cuối cùng để khởi động frontend với HTTPS
+echo "🔐 KHỞI ĐỘNG FRONTEND VỚI HTTPS - LẦN CUỐI"
+echo "=========================================="
+
+# Chuyển đến thư mục dự án
+cd "$(dirname "$0")"
+
+# Lấy IP hiện tại
+CURRENT_IP=$(ifconfig | grep "inet " | grep -v 127.0.0.1 | head -1 | awk '{print $2}')
+echo "📍 IP hiện tại: $CURRENT_IP"
+
+# Dừng tất cả process cũ
+echo "⏹️  Dừng tất cả process cũ..."
+pkill -f "vite" 2>/dev/null || true
+pkill -f "npm.*dev" 2>/dev/null || true
+sleep 3
+
+# Tạo SSL certificate mới nếu cần
+echo "🔐 Kiểm tra SSL certificate..."
+if [ ! -f "ssl/server.crt" ] || [ ! -f "ssl/server.key" ]; then
+    echo "Tạo SSL certificate mới..."
+    ./update-ssl-cert.sh
+fi
+
+# Khởi động frontend với HTTPS
+echo "🚀 Khởi động frontend với HTTPS..."
+cd frontend
+
+# Sử dụng config gốc với HTTPS
+VITE_API_BASE_URL="https://$CURRENT_IP:8000" npm run dev -- --host $CURRENT_IP --port 5173 --https &
+FRONTEND_PID=$!
+cd ..
+
+# Đợi frontend khởi động
+echo "⏳ Đợi frontend khởi động..."
+sleep 10
+
+# Kiểm tra frontend
+echo "🔍 Kiểm tra frontend..."
+if curl -s -k "https://$CURRENT_IP:5173" > /dev/null 2>&1; then
+    echo "✅ Frontend đã khởi động thành công với HTTPS"
+    echo "🌐 Truy cập: https://$CURRENT_IP:5173"
+    echo ""
+    echo "🎉 THÀNH CÔNG! Ứng dụng đã chạy với HTTPS:"
+    echo "   Frontend: https://$CURRENT_IP:5173"
+    echo "   Backend:  https://$CURRENT_IP:8000"
+    echo ""
+    echo "⚠️  Nếu trình duyệt báo 'không an toàn':"
+    echo "   1. Bấm 'Tiếp tục' hoặc 'Advanced'"
+    echo "   2. Bấm 'Proceed to 10.10.68.72 (unsafe)'"
+    echo "   3. Hoặc bấm 'Accept Risk and Continue'"
+else
+    echo "❌ Frontend khởi động thất bại với HTTPS"
+    echo "🔄 Thử với HTTP..."
+    
+    # Dừng HTTPS và thử HTTP
+    pkill -f "vite" 2>/dev/null || true
+    sleep 3
+    
+    cd frontend
+    VITE_API_BASE_URL="https://$CURRENT_IP:8000" npm run dev -- --host $CURRENT_IP --port 5173 &
+    FRONTEND_PID=$!
+    cd ..
+    
+    sleep 5
+    
+    if curl -s "http://$CURRENT_IP:5173" > /dev/null 2>&1; then
+        echo "✅ Frontend đã khởi động thành công với HTTP"
+        echo "🌐 Truy cập: http://$CURRENT_IP:5173"
+        echo ""
+        echo "⚠️  Frontend chạy với HTTP (không có s)"
+        echo "   Truy cập: http://$CURRENT_IP:5173"
+    else
+        echo "❌ Frontend khởi động thất bại hoàn toàn"
+        echo "🔧 Hãy kiểm tra log để xem lỗi"
+    fi
+fi
+
+echo "🎨 Frontend PID: $FRONTEND_PID"

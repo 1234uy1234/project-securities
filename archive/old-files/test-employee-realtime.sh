@@ -1,0 +1,53 @@
+#!/bin/bash
+
+echo "🧪 TEST EMPLOYEE DASHBOARD REAL-TIME UPDATES"
+echo "=============================================="
+
+echo ""
+echo "📋 HƯỚNG DẪN TEST:"
+echo "1. Mở Employee Dashboard trong browser"
+echo "2. Mở Developer Console (F12)"
+echo "3. Quan sát logs real-time mỗi giây"
+echo "4. Kiểm tra trạng thái thay đổi theo thời gian"
+echo ""
+
+echo "🔍 CÁC LOGS CẦN QUAN SÁT:"
+echo "- 🕐 EMPLOYEE: Current time: [thời gian hiện tại]"
+echo "- 🕐 EMPLOYEE: Stop [ID] scheduled_time: [thời gian được giao]"
+echo "- 🕐 EMPLOYEE: Stop [ID] time comparison: {...}"
+echo "- ⚪ EMPLOYEE: Stop [ID] is pending (X minutes until scheduled)"
+echo "- 🔵 EMPLOYEE: Stop [ID] is active (X minutes past scheduled)"
+echo "- 🔴 EMPLOYEE: Stop [ID] is overdue (X minutes late)"
+echo "- ✅ EMPLOYEE: Stop [ID] has checkin - showing as completed"
+echo ""
+
+echo "🎯 KẾT QUẢ MONG ĐỢI:"
+echo "✅ Thời gian hiện tại cập nhật mỗi giây"
+echo "✅ Trạng thái thay đổi từ 'Chưa đến giờ' → 'Đang thực hiện' → 'Quá hạn'"
+echo "✅ Màu sắc thay đổi: Xám → Xanh dương → Đỏ"
+echo "✅ Background task cards thay đổi màu theo trạng thái"
+echo ""
+
+echo "🚀 BẮT ĐẦU TEST:"
+echo "1. cd frontend && npm run dev"
+echo "2. Vào: http://localhost:5173/employee-dashboard"
+echo "3. Đăng nhập với employee account"
+echo "4. Mở F12 → Console tab"
+echo "5. Quan sát logs real-time"
+echo ""
+
+echo "⏰ TIMELINE TEST:"
+echo "- Trước giờ chấm công: Màu xám 'Chưa đến giờ'"
+echo "- Trong giờ chấm công: Màu xanh dương 'Đang thực hiện'"
+echo "- Sau giờ chấm công: Màu đỏ 'Quá hạn'"
+echo "- Sau khi chấm công: Màu xanh lá 'Đã hoàn thành'"
+echo ""
+
+echo "🔧 NẾU KHÔNG HOẠT ĐỘNG:"
+echo "1. Kiểm tra console có lỗi không"
+echo "2. Kiểm tra scheduled_time có đúng format HH:MM không"
+echo "3. Kiểm tra timezone có đúng Asia/Ho_Chi_Minh không"
+echo "4. Restart frontend server"
+echo ""
+
+echo "✅ TEST HOÀN THÀNH!"

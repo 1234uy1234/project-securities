@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Cache - MANHTOAN Patrol System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .button:hover {
+            background: #c82333;
+        }
+        .success {
+            background: #28a745;
+        }
+        .success:hover {
+            background: #218838;
+        }
+        .info {
+            background: #17a2b8;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .step {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear Cache - MANHTOAN Patrol System</h1>
+        
+        <div class="info">
+            <strong>⚠️ Lưu ý:</strong> Script này sẽ xóa toàn bộ cache và Service Worker để đảm bảo dữ liệu mới nhất.
+        </div>
+
+        <div class="step">
+            <h3>Bước 1: Xóa Service Worker</h3>
+            <button class="button" onclick="clearServiceWorker()">🗑️ Xóa Service Worker</button>
+            <div id="sw-result"></div>
+        </div>
+
+        <div class="step">
+            <h3>Bước 2: Xóa Cache</h3>
+            <button class="button" onclick="clearCache()">🗑️ Xóa Cache</button>
+            <div id="cache-result"></div>
+        </div>
+
+        <div class="step">
+            <h3>Bước 3: Xóa Local Storage</h3>
+            <button class="button" onclick="clearLocalStorage()">🗑️ Xóa Local Storage</button>
+            <div id="storage-result"></div>
+        </div>
+
+        <div class="step">
+            <h3>Bước 4: Reload trang</h3>
+            <button class="button success" onclick="reloadPage()">🔄 Reload trang</button>
+        </div>
+
+        <div class="step">
+            <h3>Hoặc xóa tất cả cùng lúc:</h3>
+            <button class="button" onclick="clearAll()">💥 XÓA TẤT CẢ</button>
+            <div id="all-result"></div>
+        </div>
+    </div>
+
+    <script>
+        async function clearServiceWorker() {
+            const result = document.getElementById('sw-result');
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
+                        console.log('Service Worker unregistered:', registration);
+                    }
+                    result.innerHTML = '<div style="color: green;">✅ Đã xóa Service Worker</div>';
+                } else {
+                    result.innerHTML = '<div style="color: orange;">⚠️ Browser không hỗ trợ Service Worker</div>';
+                }
+            } catch (error) {
+                result.innerHTML = '<div style="color: red;">❌ Lỗi: ' + error.message + '</div>';
+            }
+        }
+
+        async function clearCache() {
+            const result = document.getElementById('cache-result');
+            try {
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (let cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                        console.log('Cache deleted:', cacheName);
+                    }
+                    result.innerHTML = '<div style="color: green;">✅ Đã xóa ' + cacheNames.length + ' cache</div>';
+                } else {
+                    result.innerHTML = '<div style="color: orange;">⚠️ Browser không hỗ trợ Cache API</div>';
+                }
+            } catch (error) {
+                result.innerHTML = '<div style="color: red;">❌ Lỗi: ' + error.message + '</div>';
+            }
+        }
+
+        function clearLocalStorage() {
+            const result = document.getElementById('storage-result');
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+                result.innerHTML = '<div style="color: green;">✅ Đã xóa Local Storage và Session Storage</div>';
+            } catch (error) {
+                result.innerHTML = '<div style="color: red;">❌ Lỗi: ' + error.message + '</div>';
+            }
+        }
+
+        function reloadPage() {
+            window.location.reload(true);
+        }
+
+        async function clearAll() {
+            const result = document.getElementById('all-result');
+            result.innerHTML = '<div style="color: blue;">🔄 Đang xóa tất cả...</div>';
+            
+            try {
+                // Clear Service Worker
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
+                    }
+                }
+
+                // Clear Cache
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (let cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                    }
+                }
+
+                // Clear Storage
+                localStorage.clear();
+                sessionStorage.clear();
+
+                result.innerHTML = '<div style="color: green;">✅ Đã xóa tất cả! Reload trang trong 3 giây...</div>';
+                
+                setTimeout(() => {
+                    window.location.reload(true);
+                }, 3000);
+
+            } catch (error) {
+                result.innerHTML = '<div style="color: red;">❌ Lỗi: ' + error.message + '</div>';
+            }
+        }
+
+        // Auto check current status
+        window.onload = async function() {
+            console.log('🔍 Checking current cache status...');
+            
+            // Check Service Workers
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                console.log('📱 Service Workers:', registrations.length);
+            }
+            
+            // Check Caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                console.log('💾 Caches:', cacheNames);
+            }
+            
+            // Check Local Storage
+            console.log('🗄️ Local Storage keys:', Object.keys(localStorage));
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+🚀 HỆ THỐNG ĐÃ KHỞI ĐỘNG
+========================
+
+📍 IP: 10.10.68.200
+🔧 Backend: http://10.10.68.200:8000
+🎨 Frontend: http://10.10.68.200:3000
+📸 Ảnh: http://10.10.68.200:8000/uploads/
+🔗 QR Code: http://10.10.68.200:8000/api/qr-codes/{id}/image
+
+📱 TRUY CẬP TỪ THIẾT BỊ KHÁC:
+============================
+- Điện thoại: http://10.10.68.200:3000
+- Máy khác: http://10.10.68.200:3000
+- QR Scanner: http://10.10.68.200:3000/qr-scan
+- Reports: http://10.10.68.200:3000/reports
+- Admin: http://10.10.68.200:3000/admin-dashboard
+- Employee: http://10.10.68.200:3000/employee-dashboard
+
+🛑 DỪNG HỆ THỐNG:
+================
+./stop-system.sh
+
+📊 LOGS:
+========
+- Backend: tail -f backend.log
+- Frontend: tail -f frontend.log
+
+⏰ Thời gian khởi động: Wed Oct  8 09:02:24 +07 2025

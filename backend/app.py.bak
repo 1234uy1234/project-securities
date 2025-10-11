@@ -1,0 +1,20 @@
+import uvicorn
+import os
+
+if __name__ == "__main__":
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ssl_dir = os.path.join(base_dir, "ssl")
+    keyfile = os.path.join(ssl_dir, "server.key")
+    certfile = os.path.join(ssl_dir, "server.crt")
+
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",  # Sử dụng 0.0.0.0 để bind tất cả interface
+        port=8000,
+        reload=True,
+        ssl_keyfile=keyfile,
+        ssl_certfile=certfile
+    )
+
+# chay frontend: npm run dev -- --host 10.10.68.15 --port 5173
+# chay backend: python -m uvicorn app.main:app --host 10.10.68.15 --port 8000

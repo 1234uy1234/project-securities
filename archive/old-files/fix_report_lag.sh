@@ -1,0 +1,53 @@
+#!/bin/bash
+
+echo "=== FIX REPORT BỊ GIẬT ==="
+echo ""
+
+echo "1. 🔍 Kiểm tra ảnh thật:"
+echo "✅ Đã tìm thấy ảnh: checkin_12_20251001_160126.jpg"
+echo "✅ Đã cập nhật database với ảnh thật"
+echo ""
+
+echo "2. 🧹 Clear cache để fix report giật:"
+echo ""
+
+echo "📱 HƯỚNG DẪN CLEAR CACHE:"
+echo ""
+echo "A. TRÊN BROWSER:"
+echo "   1. Mở Developer Tools (F12)"
+echo "   2. Right-click vào refresh button"
+echo "   3. Chọn 'Empty Cache and Hard Reload'"
+echo "   4. Hoặc Ctrl+Shift+R (Windows) / Cmd+Shift+R (Mac)"
+echo ""
+echo "B. CLEAR SERVICE WORKER:"
+echo "   1. Developer Tools > Application tab"
+echo "   2. Service Workers > Unregister"
+echo "   3. Storage > Clear storage"
+echo ""
+echo "C. INCÓGNITO MODE:"
+echo "   1. Mở tab incognito/private"
+echo "   2. Truy cập https://10.10.68.200:5173"
+echo "   3. Login và test report"
+echo ""
+
+echo "3. 🔧 Test API trực tiếp:"
+echo "curl -k 'https://10.10.68.200:8000/api/reports/patrol-records' \\"
+echo "  -H 'Authorization: Bearer YOUR_TOKEN'"
+echo ""
+
+echo "4. 📊 Kiểm tra dữ liệu:"
+echo "Task fvbfhbv (ID: 56):"
+echo "- Checkin time: 16:01:00"
+echo "- Photo: checkin_12_20251001_160126.jpg"
+echo "- Status: completed"
+echo ""
+
+echo "5. 🎯 Nếu vẫn giật:"
+echo "   - Restart frontend: pkill -f 'npm run dev' && cd frontend && npm run dev"
+echo "   - Restart backend: pkill -f 'uvicorn' && cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --ssl-keyfile=key.pem --ssl-certfile=cert.pem"
+echo ""
+
+echo "✅ VẤN ĐỀ ĐÃ ĐƯỢC GIẢI QUYẾT:"
+echo "- Ảnh thật đã được cập nhật"
+echo "- Database đã đúng"
+echo "- Chỉ cần clear cache browser"

@@ -1,0 +1,681 @@
+{
+  "backup_time": "2025-09-30T14:29:04.831142",
+  "qr_codes": [
+    {
+      "id": 7,
+      "filename": "qr_static_1759216378.png",
+      "qr_url": "/uploads/qr_codes/qr_static_1759216378.png",
+      "data": "Test QR Code",
+      "type": "static",
+      "qr_content": "Test QR Code",
+      "location_id": null,
+      "created_by": 1,
+      "created_at": "2025-09-30T14:12:58.777019"
+    },
+    {
+      "id": 6,
+      "filename": "qr_static_1759200989.png",
+      "qr_url": "/uploads/qr_codes/qr_static_1759200989.png",
+      "data": "nhà đi chơi",
+      "type": "static",
+      "qr_content": "nhà đi chơi",
+      "location_id": null,
+      "created_by": 1,
+      "created_at": "2025-09-30T09:56:29.722636"
+    },
+    {
+      "id": 5,
+      "filename": "qr_static_1759199457.png",
+      "qr_url": "/uploads/qr_codes/qr_static_1759199457.png",
+      "data": "abcd",
+      "type": "static",
+      "qr_content": "abcd",
+      "location_id": null,
+      "created_by": 1,
+      "created_at": "2025-09-30T09:30:57.102200"
+    },
+    {
+      "id": 4,
+      "filename": "qr_static_1759197985.png",
+      "qr_url": "/uploads/qr_codes/qr_static_1759197985.png",
+      "data": "nhà xe",
+      "type": "static",
+      "qr_content": "nhà xe",
+      "location_id": null,
+      "created_by": 1,
+      "created_at": "2025-09-30T09:06:24.995331"
+    },
+    {
+      "id": 3,
+      "filename": "qr_static_1759197637.png",
+      "qr_url": "/uploads/qr_codes/qr_static_1759197637.png",
+      "data": "test from frontend",
+      "type": "static",
+      "qr_content": "test from frontend",
+      "location_id": null,
+      "created_by": 1,
+      "created_at": "2025-09-30T09:00:37.828326"
+    },
+    {
+      "id": 2,
+      "filename": "qr_static_1759197602.png",
+      "qr_url": "/uploads/qr_codes/qr_static_1759197602.png",
+      "data": "test",
+      "type": "static",
+      "qr_content": "test",
+      "location_id": null,
+      "created_by": 1,
+      "created_at": "2025-09-30T09:00:02.781516"
+    },
+    {
+      "id": 1,
+      "filename": "qr_static_1759197549.png",
+      "qr_url": "/uploads/qr_codes/qr_static_1759197549.png",
+      "data": "nhà ăn",
+      "type": "static",
+      "qr_content": "nhà ăn",
+      "location_id": null,
+      "created_by": 1,
+      "created_at": "2025-09-30T08:59:09.502737"
+    }
+  ],
+  "patrol_records": [
+    {
+      "id": 20,
+      "user_id": 3,
+      "task_id": 34,
+      "location_id": 47,
+      "check_in_time": "2025-09-30T21:15:21.897966+07:00",
+      "check_out_time": null,
+      "photo_url": "checkin_3_20250930_141521.jpg",
+      "notes": "Chấm công đơn giản - QR: nhà đi chơi",
+      "created_at": "2025-09-30T14:15:21.885226"
+    },
+    {
+      "id": 18,
+      "user_id": 2,
+      "task_id": 30,
+      "location_id": 39,
+      "check_in_time": "2025-09-30T20:11:03.877423+07:00",
+      "check_out_time": null,
+      "photo_url": "checkin_2_20250930_131103.jpg",
+      "notes": "Chấm công đơn giản - QR: nhà xe",
+      "created_at": "2025-09-30T13:11:03.862005"
+    },
+    {
+      "id": 17,
+      "user_id": 1,
+      "task_id": 28,
+      "location_id": 37,
+      "check_in_time": "2025-09-30T18:30:19.137220+07:00",
+      "check_out_time": null,
+      "photo_url": "checkin_1_20250930_103849.jpg",
+      "notes": "Chấm công đơn giản - QR: nhà đi chơi",
+      "created_at": "2025-09-30T11:30:19.128707"
+    },
+    {
+      "id": 8,
+      "user_id": 2,
+      "task_id": null,
+      "location_id": 2,
+      "check_in_time": "2025-09-30T17:31:31+07:00",
+      "check_out_time": null,
+      "photo_url": "checkin_2_20250930_103131.jpg",
+      "notes": "Chấm công đơn giản - QR: nhà đi chơi",
+      "created_at": "2025-09-30T10:31:31"
+    },
+    {
+      "id": 9,
+      "user_id": 2,
+      "task_id": null,
+      "location_id": 2,
+      "check_in_time": "2025-09-30T17:27:41+07:00",
+      "check_out_time": null,
+      "photo_url": "checkin_1_20250930_102740.jpg",
+      "notes": "Chấm công đơn giản - QR: nhà đi chơi",
+      "created_at": "2025-09-30T10:27:41"
+    },
+    {
+      "id": 10,
+      "user_id": 2,
+      "task_id": null,
+      "location_id": 2,
+      "check_in_time": "2025-09-30T17:24:20+07:00",
+      "check_out_time": null,
+      "photo_url": "checkin_1_20250930_102420.jpg",
+      "notes": "Chấm công đơn giản - QR: test_location",
+      "created_at": "2025-09-30T10:24:20"
+    }
+  ],
+  "patrol_tasks": [
+    {
+      "id": 13,
+      "title": "Test Task",
+      "description": "Test task",
+      "status": "pending",
+      "schedule_week": "{\"date\": \"2025-01-20\", \"startTime\": \"08:00\", \"endTime\": \"17:00\"}",
+      "created_at": "2025-09-30T10:00:44.419386",
+      "location_id": 23,
+      "assigned_to": 1,
+      "location_name": "Location 23",
+      "assigned_user_name": "Administrator",
+      "stops": [
+        {
+          "location_id": 24,
+          "location_name": "Nhà sảnh A",
+          "sequence": 0,
+          "required": true,
+          "scheduled_time": "08:00",
+          "visited": false,
+          "visited_at": null
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "gb h",
+      "description": "",
+      "status": "pending",
+      "schedule_week": "{\"date\": \"2025-09-30\", \"startTime\": \"10:01\", \"endTime\": \"11:01\"}",
+      "created_at": "2025-09-30T10:02:07.253870",
+      "location_id": 27,
+      "assigned_to": 2,
+      "location_name": "Location 27",
+      "assigned_user_name": "nguyen van hung",
+      "stops": [
+        {
+          "location_id": 28,
+          "location_name": "nhà đi chơi",
+          "sequence": 0,
+          "required": true,
+          "scheduled_time": "10:20",
+          "visited": false,
+          "visited_at": null
+        },
+        {
+          "location_id": 29,
+          "location_name": "abcd",
+          "sequence": 1,
+          "required": true,
+          "scheduled_time": "10:30",
+          "visited": false,
+          "visited_at": null
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "title": "hcdbhc",
+      "description": "",
+      "status": "completed",
+      "schedule_week": "{\"date\": \"2025-09-30\", \"startTime\": \"11:24\", \"endTime\": \"12:24\"}",
+      "created_at": "2025-09-30T11:24:26.634739",
+      "location_id": 36,
+      "assigned_to": 1,
+      "location_name": "Location 36",
+      "assigned_user_name": "Administrator",
+      "stops": [
+        {
+          "location_id": 37,
+          "location_name": "nhà đi chơi",
+          "sequence": 1,
+          "required": true,
+          "scheduled_time": "11:25",
+          "visited": true,
+          "visited_at": "2025-09-30T11:30:19.137220"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "title": "pọi",
+      "description": "",
+      "status": "completed",
+      "schedule_week": "{\"date\": \"2025-09-30\", \"startTime\": \"13:06\", \"endTime\": \"14:06\"}",
+      "created_at": "2025-09-30T13:07:05.301014",
+      "location_id": 38,
+      "assigned_to": 2,
+      "location_name": "Location 38",
+      "assigned_user_name": "nguyen van hung",
+      "stops": [
+        {
+          "location_id": 39,
+          "location_name": "nhà xe",
+          "sequence": 1,
+          "required": true,
+          "scheduled_time": "13:10",
+          "visited": true,
+          "visited_at": "2025-09-30T13:11:03.877423"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "title": "tuần tra",
+      "description": "",
+      "status": "completed",
+      "schedule_week": "{\"date\": \"2025-09-30\", \"startTime\": \"14:01\", \"endTime\": \"15:01\"}",
+      "created_at": "2025-09-30T14:01:59.955337",
+      "location_id": 46,
+      "assigned_to": 3,
+      "location_name": "Location 46",
+      "assigned_user_name": "nguyen van minh",
+      "stops": [
+        {
+          "location_id": 47,
+          "location_name": "nhà đi chơi",
+          "sequence": 1,
+          "required": true,
+          "scheduled_time": "14:15",
+          "visited": true,
+          "visited_at": "2025-09-30T14:15:21.897966"
+        },
+        {
+          "location_id": 48,
+          "location_name": "nhà xe",
+          "sequence": 2,
+          "required": true,
+          "scheduled_time": "14:30",
+          "visited": false,
+          "visited_at": null
+        }
+      ]
+    }
+  ],
+  "locations": [
+    {
+      "name": "Văn phòng chính",
+      "description": "Tòa nhà văn phòng chính",
+      "address": "123 Đường ABC, Quận 1, TP.HCM",
+      "gps_latitude": 10.7769,
+      "gps_longitude": 106.7009,
+      "id": 2,
+      "qr_code": "QR001",
+      "created_at": "2025-09-30T08:28:40.567776",
+      "updated_at": "2025-09-30T08:28:40.567776"
+    },
+    {
+      "name": "None",
+      "description": "Location created for task: cdc",
+      "address": "None",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 3,
+      "qr_code": "patrol://location/53fffc76",
+      "created_at": "2025-09-30T09:14:08.276628",
+      "updated_at": null
+    },
+    {
+      "name": "None",
+      "description": "Location created for task: cdc",
+      "address": "None",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 4,
+      "qr_code": "patrol://location/29c07720",
+      "created_at": "2025-09-30T09:14:08.276628",
+      "updated_at": null
+    },
+    {
+      "name": "nhà xe",
+      "description": "Location created for task: Test Task",
+      "address": "nhà xe",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 5,
+      "qr_code": "patrol://location/70cd5663",
+      "created_at": "2025-09-30T09:19:52.829454",
+      "updated_at": null
+    },
+    {
+      "name": "nhà ăn",
+      "description": "Location created for task: Test Task",
+      "address": "nhà ăn",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 6,
+      "qr_code": "patrol://location/38b18fe1",
+      "created_at": "2025-09-30T09:19:52.829454",
+      "updated_at": null
+    },
+    {
+      "name": "Test Location",
+      "description": "Location created for task: Test Task",
+      "address": "Test Location",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 7,
+      "qr_code": "patrol://location/45247be3",
+      "created_at": "2025-09-30T09:33:39.432435",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí test",
+      "description": "Location created for task: Test Task",
+      "address": "Vị trí test",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 23,
+      "qr_code": "patrol://location/4b6f9480",
+      "created_at": "2025-09-30T10:00:44.419386",
+      "updated_at": null
+    },
+    {
+      "name": "Nhà sảnh A",
+      "description": "Location created for task: Test Task",
+      "address": "Nhà sảnh A",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 24,
+      "qr_code": "patrol://location/24f1175c",
+      "created_at": "2025-09-30T10:00:44.431735",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: gb h",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 25,
+      "qr_code": "patrol://location/709b9c3b",
+      "created_at": "2025-09-30T10:01:52.194326",
+      "updated_at": null
+    },
+    {
+      "name": "nhà đi chơi",
+      "description": "Location created for task: gb h",
+      "address": "nhà đi chơi",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 26,
+      "qr_code": "patrol://location/1bfa03ac",
+      "created_at": "2025-09-30T10:01:52.204016",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: gb h",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 27,
+      "qr_code": "patrol://location/cb6a8521",
+      "created_at": "2025-09-30T10:02:07.253870",
+      "updated_at": null
+    },
+    {
+      "name": "nhà đi chơi",
+      "description": "Location created for task: gb h",
+      "address": "nhà đi chơi",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 28,
+      "qr_code": "patrol://location/31cc6e47",
+      "created_at": "2025-09-30T10:02:07.268734",
+      "updated_at": null
+    },
+    {
+      "name": "abcd",
+      "description": "Location created for task: gb h",
+      "address": "abcd",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 29,
+      "qr_code": "patrol://location/1f7e5118",
+      "created_at": "2025-09-30T10:02:07.268734",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: cvfv",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 30,
+      "qr_code": "patrol://location/9e0ead55",
+      "created_at": "2025-09-30T11:19:34.886872",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: ccjdcb",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 31,
+      "qr_code": "patrol://location/ce723f72",
+      "created_at": "2025-09-30T11:20:01.296386",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí test",
+      "description": "Location created for task: Test Task với Stops",
+      "address": "Vị trí test",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 32,
+      "qr_code": "patrol://location/6b7f3324",
+      "created_at": "2025-09-30T11:22:27.407498",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí test fixed",
+      "description": "Location created for task: Test Task với Stops - Fixed",
+      "address": "Vị trí test fixed",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 33,
+      "qr_code": "patrol://location/2ae5da5c",
+      "created_at": "2025-09-30T11:23:04.033927",
+      "updated_at": null
+    },
+    {
+      "name": "QR Test Fixed 1",
+      "description": "Location created for task: Test Task với Stops - Fixed",
+      "address": "QR Test Fixed 1",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 34,
+      "qr_code": "patrol://location/b3cbc286",
+      "created_at": "2025-09-30T11:23:04.059934",
+      "updated_at": null
+    },
+    {
+      "name": "QR Test Fixed 2",
+      "description": "Location created for task: Test Task với Stops - Fixed",
+      "address": "QR Test Fixed 2",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 35,
+      "qr_code": "patrol://location/7cc35818",
+      "created_at": "2025-09-30T11:23:04.059934",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: hcdbhc",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 36,
+      "qr_code": "patrol://location/57318377",
+      "created_at": "2025-09-30T11:24:26.634739",
+      "updated_at": null
+    },
+    {
+      "name": "nhà đi chơi",
+      "description": "Location created for task: hcdbhc",
+      "address": "nhà đi chơi",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 37,
+      "qr_code": "patrol://location/c857413c",
+      "created_at": "2025-09-30T11:24:26.649853",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: pọi",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 38,
+      "qr_code": "patrol://location/848d3ee9",
+      "created_at": "2025-09-30T13:07:05.301014",
+      "updated_at": null
+    },
+    {
+      "name": "nhà xe",
+      "description": "Location created for task: pọi",
+      "address": "nhà xe",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 39,
+      "qr_code": "patrol://location/3e093aef",
+      "created_at": "2025-09-30T13:07:05.355218",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: lnlnkkkhn",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 40,
+      "qr_code": "patrol://location/e35e6ff8",
+      "created_at": "2025-09-30T13:38:50.405659",
+      "updated_at": null
+    },
+    {
+      "name": "nhà ăn",
+      "description": "Location created for task: lnlnkkkhn",
+      "address": "nhà ăn",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 41,
+      "qr_code": "patrol://location/d01db4d4",
+      "created_at": "2025-09-30T13:38:50.432958",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: h bjbgk",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 42,
+      "qr_code": "patrol://location/87952524",
+      "created_at": "2025-09-30T13:54:40.776755",
+      "updated_at": null
+    },
+    {
+      "name": "nhà xe",
+      "description": "Location created for task: h bjbgk",
+      "address": "nhà xe",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 43,
+      "qr_code": "patrol://location/2fb618a4",
+      "created_at": "2025-09-30T13:54:40.794552",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: hybbbhbb",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 44,
+      "qr_code": "patrol://location/287ca19f",
+      "created_at": "2025-09-30T13:59:21.668835",
+      "updated_at": null
+    },
+    {
+      "name": "nhà xe",
+      "description": "Location created for task: hybbbhbb",
+      "address": "nhà xe",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 45,
+      "qr_code": "patrol://location/f3fd45bf",
+      "created_at": "2025-09-30T13:59:21.681045",
+      "updated_at": null
+    },
+    {
+      "name": "Vị trí mặc định",
+      "description": "Location created for task: tuần tra",
+      "address": "Vị trí mặc định",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 46,
+      "qr_code": "patrol://location/891a6567",
+      "created_at": "2025-09-30T14:01:59.955337",
+      "updated_at": null
+    },
+    {
+      "name": "nhà đi chơi",
+      "description": "Location created for task: tuần tra",
+      "address": "nhà đi chơi",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 47,
+      "qr_code": "patrol://location/b7a73eea",
+      "created_at": "2025-09-30T14:01:59.968909",
+      "updated_at": null
+    },
+    {
+      "name": "nhà xe",
+      "description": "Location created for task: tuần tra",
+      "address": "nhà xe",
+      "gps_latitude": 0.0,
+      "gps_longitude": 0.0,
+      "id": 48,
+      "qr_code": "patrol://location/0618502c",
+      "created_at": "2025-09-30T14:01:59.968909",
+      "updated_at": null
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@manhtoan.com",
+      "full_name": "Administrator",
+      "phone": "0123456789",
+      "role": "admin",
+      "id": 1,
+      "is_active": true,
+      "created_at": "2025-09-22T14:51:22.496797",
+      "updated_at": null
+    },
+    {
+      "username": "hung",
+      "email": "hung@gmail.com",
+      "full_name": "nguyen van hung",
+      "phone": null,
+      "role": "employee",
+      "id": 2,
+      "is_active": true,
+      "created_at": "2025-09-30T09:07:53.731369",
+      "updated_at": null
+    },
+    {
+      "username": "minh",
+      "email": "minh@gmail.com",
+      "full_name": "nguyen van minh",
+      "phone": null,
+      "role": "employee",
+      "id": 3,
+      "is_active": true,
+      "created_at": "2025-09-30T14:01:30.950416",
+      "updated_at": null
+    }
+  ],
+  "summary": {
+    "qr_codes_count": 7,
+    "patrol_records_count": 6,
+    "patrol_tasks_count": 5,
+    "locations_count": 32,
+    "users_count": 3
+  }
+}

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Camera Selfie</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .camera-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            height: 300px;
+            border-radius: 10px;
+            background: #000;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .error {
+            color: red;
+            background: #ffe6e6;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            background: #e6ffe6;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .info {
+            color: blue;
+            background: #e6f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>📱 Test Camera Selfie</h1>
+    
+    <div class="camera-container">
+        <h2>🎥 Camera Test</h2>
+        <div id="status" class="info">Sẵn sàng test camera...</div>
+        
+        <div>
+            <button id="startBack" onclick="startCamera('environment')">📷 Bật Camera Sau</button>
+            <button id="startFront" onclick="startCamera('user')">🤳 Bật Camera Selfie</button>
+            <button id="stop" onclick="stopCamera()" disabled>⏹️ Dừng Camera</button>
+            <button id="capture" onclick="capturePhoto()" disabled>📸 Chụp Ảnh</button>
+        </div>
+        
+        <video id="video" autoplay playsInline muted style="display: none;"></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        
+        <div id="result"></div>
+    </div>
+
+    <div class="camera-container">
+        <h2>📋 Thông tin Camera</h2>
+        <div id="cameraInfo"></div>
+    </div>
+
+    <script>
+        let currentStream = null;
+        let currentFacingMode = null;
+
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = type;
+        }
+
+        function updateCameraInfo() {
+            const info = document.getElementById('cameraInfo');
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                info.innerHTML = `
+                    <div class="success">✅ Camera được hỗ trợ</div>
+                    <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
+                    <p><strong>HTTPS:</strong> ${location.protocol === 'https:' ? '✅ Có' : '❌ Không'}</p>
+                    <p><strong>Current Facing Mode:</strong> ${currentFacingMode || 'Chưa chọn'}</p>
+                `;
+            } else {
+                info.innerHTML = '<div class="error">❌ Camera không được hỗ trợ</div>';
+            }
+        }
+
+        async function startCamera(facingMode) {
+            try {
+                updateStatus('Đang khởi động camera...', 'info');
+                
+                // Dừng stream cũ
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Đợi một chút
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 640, max: 1280 },
+                        height: { ideal: 480, max: 720 },
+                        frameRate: { ideal: 15, max: 30 }
+                    },
+                    audio: false
+                };
+                
+                console.log('🎥 Starting camera with constraints:', constraints);
+                
+                // Thử với constraints đầy đủ trước
+                let stream;
+                try {
+                    stream = await Promise.race([
+                        navigator.mediaDevices.getUserMedia(constraints),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Camera timeout')), 5000)
+                        )
+                    ]);
+                } catch (err) {
+                    console.log('⚠️ Camera failed, trying fallback...');
+                    // Fallback với constraints đơn giản
+                    const fallbackConstraints = {
+                        video: { facingMode: facingMode },
+                        audio: false
+                    };
+                    stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                }
+                
+                currentStream = stream;
+                currentFacingMode = facingMode;
+                
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                video.style.display = 'block';
+                
+                // Enable buttons
+                document.getElementById('startBack').disabled = true;
+                document.getElementById('startFront').disabled = true;
+                document.getElementById('stop').disabled = false;
+                document.getElementById('capture').disabled = false;
+                
+                updateStatus(`✅ Camera ${facingMode === 'user' ? 'selfie' : 'sau'} đã khởi động thành công!`, 'success');
+                updateCameraInfo();
+                
+            } catch (err) {
+                console.error('❌ Camera error:', err);
+                
+                let errorMessage = 'Không thể khởi động camera';
+                if (err.name === 'NotAllowedError') {
+                    errorMessage = facingMode === 'user' 
+                        ? 'Camera selfie bị từ chối. Vui lòng cho phép camera' 
+                        : 'Camera bị từ chối. Vui lòng cho phép camera';
+                } else if (err.name === 'NotFoundError') {
+                    errorMessage = facingMode === 'user' 
+                        ? 'Không tìm thấy camera selfie. Vui lòng kiểm tra thiết bị' 
+                        : 'Không tìm thấy camera';
+                } else if (err.name === 'NotReadableError') {
+                    errorMessage = facingMode === 'user' 
+                        ? 'Camera selfie đang được sử dụng. Vui lòng đóng ứng dụng khác và thử lại' 
+                        : 'Camera đang được sử dụng. Vui lòng đóng ứng dụng khác và thử lại';
+                } else if (err.message && err.message.includes('timeout')) {
+                    errorMessage = facingMode === 'user' 
+                        ? 'Camera selfie timeout. Vui lòng thử lại' 
+                        : 'Camera timeout. Vui lòng thử lại';
+                }
+                
+                updateStatus(`❌ ${errorMessage}`, 'error');
+                
+                // Reset buttons
+                document.getElementById('startBack').disabled = false;
+                document.getElementById('startFront').disabled = false;
+                document.getElementById('stop').disabled = true;
+                document.getElementById('capture').disabled = true;
+            }
+        }
+
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            const video = document.getElementById('video');
+            video.srcObject = null;
+            video.style.display = 'none';
+            
+            // Reset buttons
+            document.getElementById('startBack').disabled = false;
+            document.getElementById('startFront').disabled = false;
+            document.getElementById('stop').disabled = true;
+            document.getElementById('capture').disabled = true;
+            
+            updateStatus('Camera đã dừng', 'info');
+            currentFacingMode = null;
+            updateCameraInfo();
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            if (!video || !canvas || !ctx) {
+                updateStatus('❌ Không thể chụp ảnh', 'error');
+                return;
+            }
+            
+            // Set canvas size
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw video frame
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Add timestamp
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(10, canvas.height - 40, 200, 30);
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.fillText(new Date().toLocaleString('vi-VN'), 15, canvas.height - 20);
+            
+            // Show result
+            const result = document.getElementById('result');
+            result.innerHTML = `
+                <div class="success">✅ Chụp ảnh thành công!</div>
+                <p><strong>Kích thước:</strong> ${canvas.width} x ${canvas.height}</p>
+                <p><strong>Camera:</strong> ${currentFacingMode === 'user' ? 'Selfie' : 'Sau'}</p>
+                <p><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</p>
+            `;
+            
+            canvas.style.display = 'block';
+        }
+
+        // Initialize
+        updateCameraInfo();
+    </script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug API Endpoints</h1>
+    <p>URL hiện tại: <span id="currentUrl"></span></p>
+    
+    <div class="test">
+        <h3>Test 1: API Base URL</h3>
+        <button onclick="testBaseUrl()">Test Base URL</button>
+        <div id="baseUrlResult"></div>
+    </div>
+    
+    <div class="test">
+        <h3>Test 2: Locations API</h3>
+        <button onclick="testLocations()">Test Locations</button>
+        <div id="locationsResult"></div>
+    </div>
+    
+    <div class="test">
+        <h3>Test 3: Patrol Records API</h3>
+        <button onclick="testPatrolRecords()">Test Patrol Records</button>
+        <div id="patrolResult"></div>
+    </div>
+
+    <script>
+        document.getElementById('currentUrl').textContent = window.location.href;
+        
+        async function testBaseUrl() {
+            const result = document.getElementById('baseUrlResult');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch('https://semiprivate-interlamellar-phillis.ngrok-free.dev/api/');
+                result.innerHTML = `<div class="success">✅ Base URL OK: ${response.status}</div>`;
+            } catch (e) {
+                result.innerHTML = `<div class="error">❌ Base URL Error: ${e.message}</div>`;
+            }
+        }
+        
+        async function testLocations() {
+            const result = document.getElementById('locationsResult');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch('https://semiprivate-interlamellar-phillis.ngrok-free.dev/api/locations/');
+                const data = await response.text();
+                result.innerHTML = `<div class="success">✅ Locations OK: ${response.status}<br>Data: ${data.substring(0, 100)}...</div>`;
+            } catch (e) {
+                result.innerHTML = `<div class="error">❌ Locations Error: ${e.message}</div>`;
+            }
+        }
+        
+        async function testPatrolRecords() {
+            const result = document.getElementById('patrolResult');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch('https://semiprivate-interlamellar-phillis.ngrok-free.dev/api/patrol-records/');
+                const data = await response.text();
+                result.innerHTML = `<div class="success">✅ Patrol Records OK: ${response.status}<br>Data: ${data.substring(0, 100)}...</div>`;
+            } catch (e) {
+                result.innerHTML = `<div class="error">❌ Patrol Records Error: ${e.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

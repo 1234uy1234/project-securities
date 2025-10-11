@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Camera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <h1>Test Camera</h1>
+    <video id="video" width="320" height="240" autoplay></video>
+    <br>
+    <button onclick="startCamera()">Start Camera</button>
+    <button onclick="capturePhoto()">Capture Photo</button>
+    <br>
+    <canvas id="canvas" width="320" height="240" style="border:1px solid #000;"></canvas>
+    <br>
+    <div id="result"></div>
+
+    <script>
+        let stream = null;
+        
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                
+                document.getElementById('result').innerHTML = '✅ Camera started successfully';
+            } catch (err) {
+                document.getElementById('result').innerHTML = '❌ Camera error: ' + err.message;
+                console.error('Camera error:', err);
+            }
+        }
+        
+        function capturePhoto() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            if (!video.videoWidth || !video.videoHeight) {
+                document.getElementById('result').innerHTML = '❌ Video not ready';
+                return;
+            }
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+            
+            if (imageData && imageData.startsWith('data:image/')) {
+                document.getElementById('result').innerHTML = '✅ Photo captured successfully! Length: ' + imageData.length;
+                console.log('Photo data:', imageData.substring(0, 100) + '...');
+            } else {
+                document.getElementById('result').innerHTML = '❌ Failed to capture photo';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""
+Script tạo QR code cho từng vị trí - LOGIC MỚI ĐƠN GIẢN
+Mỗi QR code sẽ chứa location_id để checkin chính xác
+"""
+
+import os
+import sys
+import qrcode
+from datetime import datetime
+import requests
+import json
+
+# Thêm path để import modules
+sys.path.append('/Users/maybe/Documents/shopee/backend')
+
+def create_qr_for_location(location_id: int, location_name: str, base_url: str = "https://localhost:8000"):
+    """Tạo QR code cho một vị trí cụ thể"""
+    
+    print(f"🔧 Tạo QR code cho vị trí: {location_name} (ID: {location_id})")
+    
+    # QR content đơn giản - chỉ chứa location_id
+    qr_content = str(location_id)
+    
+    # Tạo QR code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_content)
+    qr.make(fit=True)
+    
+    # Tạo ảnh
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Tạo tên file
+    safe_name = location_name.replace(" ", "_").replace("/", "_").lower()
+    filename = f"location_{location_id:02d}_{safe_name}.png"
+    
+    # Lưu vào thư mục uploads/qr_codes
+    upload_dir = "/Users/maybe/Documents/shopee/uploads/qr_codes"
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    file_path = os.path.join(upload_dir, filename)
+    img.save(file_path)
+    
+    print(f"✅ QR code đã tạo: {filename}")
+    print(f"   Content: {qr_content}")
+    print(f"   File: {file_path}")
+    
+    return {
+        "location_id": location_id,
+        "location_name": location_name,
+        "qr_content": qr_content,
+        "filename": filename,
+        "file_path": file_path
+    }
+
+def create_all_location_qr_codes():
+    """Tạo QR code cho tất cả vị trí"""
+    
+    print("🚀 TẠO QR CODE CHO TẤT CẢ VỊ TRÍ")
+    print("=" * 50)
+    
+    # Danh sách vị trí cố định
+    locations = [
+        {"id": 1, "name": "Cổng chính"},
+        {"id": 2, "name": "Nhà ăn"},
+        {"id": 3, "name": "Kho hàng"},
+        {"id": 4, "name": "Văn phòng"},
+        {"id": 5, "name": "Xưởng sản xuất"},
+        {"id": 6, "name": "Bãi đỗ xe"},
+        {"id": 7, "name": "Khu vực nghỉ ngơi"},
+        {"id": 8, "name": "Phòng họp"},
+        {"id": 9, "name": "Khu vực an toàn"},
+        {"id": 10, "name": "Cổng phụ"}
+    ]
+    
+    created_qr_codes = []
+    
+    for location in locations:
+        try:
+            qr_data = create_qr_for_location(
+                location["id"], 
+                location["name"]
+            )
+            created_qr_codes.append(qr_data)
+        except Exception as e:
+            print(f"❌ Lỗi tạo QR cho {location['name']}: {str(e)}")
+    
+    print("\n📋 TỔNG KẾT:")
+    print("=" * 50)
+    print(f"✅ Đã tạo {len(created_qr_codes)} QR codes")
+    
+    for qr in created_qr_codes:
+        print(f"   - {qr['location_name']}: {qr['qr_content']} → {qr['filename']}")
+    
+    print("\n🎯 CÁCH SỬ DỤNG:")
+    print("=" * 50)
+    print("1. In QR code ra giấy")
+    print("2. Dán tại vị trí tương ứng")
+    print("3. Employee quét QR → chụp ảnh → checkin")
+    print("4. Hệ thống sẽ tự động:")
+    print("   - Tìm đúng vị trí từ QR content")
+    print("   - Tìm task của employee tại vị trí đó")
+    print("   - Lưu ảnh và thời gian checkin")
+    print("   - Cập nhật trạng thái task")
+    
+    return created_qr_codes
+
+def test_qr_content():
+    """Test QR content để đảm bảo logic đúng"""
+    
+    print("\n🧪 TEST QR CONTENT:")
+    print("=" * 50)
+    
+    test_contents = ["1", "2", "3", "10"]
+    
+    for content in test_contents:
+        print(f"QR Content: '{content}'")
+        
+        # Simulate logic từ backend
+        try:
+            location_id = int(content)
+            print(f"  → Parsed location_id: {location_id}")
+            print(f"  → Valid: ✅")
+        except ValueError:
+            print(f"  → Invalid: ❌")
+        print()
+
+if __name__ == "__main__":
+    try:
+        # Tạo QR codes
+        qr_codes = create_all_location_qr_codes()
+        
+        # Test logic
+        test_qr_content()
+        
+        print("\n🎉 HOÀN THÀNH!")
+        print("QR codes đã được tạo và sẵn sàng sử dụng!")
+        
+    except Exception as e:
+        print(f"❌ Lỗi: {str(e)}")
+        sys.exit(1)

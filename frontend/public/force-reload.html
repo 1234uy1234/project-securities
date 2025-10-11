@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force Reload - MANHTOAN Patrol System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            margin: 20px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .countdown {
+            font-size: 24px;
+            color: #dc3545;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Force Reload</h1>
+        <p>Script này sẽ force reload trang để đảm bảo dữ liệu mới nhất.</p>
+        
+        <button class="button" onclick="forceReload()">🔄 Force Reload ngay</button>
+        
+        <div id="countdown" class="countdown"></div>
+        
+        <p><strong>Hoặc:</strong></p>
+        <p>Nhấn <kbd>Ctrl + Shift + R</kbd> (Windows/Linux)</p>
+        <p>Nhấn <kbd>Cmd + Shift + R</kbd> (Mac)</p>
+    </div>
+
+    <script>
+        function forceReload() {
+            // Clear all caches
+            if ('caches' in window) {
+                caches.keys().then(function(cacheNames) {
+                    cacheNames.forEach(function(cacheName) {
+                        caches.delete(cacheName);
+                    });
+                });
+            }
+            
+            // Clear localStorage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Force reload
+            window.location.reload(true);
+        }
+
+        // Auto countdown
+        let countdown = 5;
+        const countdownElement = document.getElementById('countdown');
+        
+        const timer = setInterval(() => {
+            countdownElement.textContent = `Tự động reload trong ${countdown} giây...`;
+            countdown--;
+            
+            if (countdown < 0) {
+                clearInterval(timer);
+                forceReload();
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

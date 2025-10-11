@@ -1,0 +1,21 @@
+{
+  "backup_time": "2025-09-30T14:29:04.965611",
+  "api_base_url": "https://localhost:8000/api",
+  "backup_type": "full_system",
+  "database_summary": {
+    "qr_codes_count": 7,
+    "patrol_records_count": 6,
+    "patrol_tasks_count": 5,
+    "locations_count": 32,
+    "users_count": 3
+  },
+  "files_backed_up": 83,
+  "backup_path": "full_system_backup/full_backup_20250930_142904",
+  "restore_instructions": [
+    "1. Restore database data: python3 restore_database_data.py",
+    "2. Restore upload files: python3 restore_upload_files.py",
+    "3. Update API base URL in frontend if needed",
+    "4. Restart backend server"
+  ],
+  "note": "Full system backup - includes all data and files"
+}

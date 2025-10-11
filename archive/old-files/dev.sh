@@ -1,0 +1,43 @@
+#!/bin/bash
+set -e
+
+# Paths
+ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
+BACKEND_DIR="$ROOT_DIR/backend"
+FRONTEND_DIR="$ROOT_DIR/frontend"
+
+# Start PostgreSQL if using Docker (optional)
+if ! psql -U postgres -c "\l" >/dev/null 2>&1; then
+  echo "PostgreSQL local không sẵn sàng. Khởi động nhanh bằng Docker..."
+  docker run -d --rm --name patrol-postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=patrol_system -p 5432:5432 postgres:15 >/dev/null
+  echo "Đợi Postgres khởi động..."; sleep 5
+fi
+
+# Backend venv + deps
+cd "$BACKEND_DIR"
+if [ ! -d "venv" ]; then
+  python3 -m venv venv
+fi
+source venv/bin/activate
+pip install -r requirements.txt >/dev/null
+
+# Tạo DB nếu chưa có
+psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'patrol_system'" | grep -q 1 || psql -U postgres -c "CREATE DATABASE patrol_system" >/dev/null
+
+# Chạy backend (HTTPS on stable IP)
+echo "Khởi chạy backend tại https://10.10.68.22:8000"
+nohup python app.py >/dev/null 2>&1 &
+
+# Frontend deps
+cd "$FRONTEND_DIR"
+npm install >/dev/null
+
+# Chạy frontend (HTTPS on stable IP)
+echo "Khởi chạy frontend tại https://10.10.68.22:5173"
+nohup npm run dev -- --host 10.10.68.22 --port 5173 >/dev/null 2>&1 &
+
+cd "$ROOT_DIR"
+echo "Mở trình duyệt..."
+( sleep 1; open https://10.10.68.22:5173 ) >/dev/null 2>&1 &
+
+echo "Tất cả đã khởi động."

@@ -1,0 +1,35 @@
+🌐 HỆ THỐNG NGROK ĐÃ KHỞI ĐỘNG
+==============================
+
+🔗 Ngrok URL: https://semiprivate-interlamellar-phillis.ngrok-free.dev
+🔧 Backend: https://semiprivate-interlamellar-phillis.ngrok-free.dev
+🎨 Frontend: https://10.10.68.200:3000
+📸 Ảnh: https://semiprivate-interlamellar-phillis.ngrok-free.dev/uploads/
+🔗 QR Code: https://semiprivate-interlamellar-phillis.ngrok-free.dev/api/qr-codes/{id}/image
+
+📱 TRUY CẬP TỪ MỌI NƠI:
+======================
+- 4G: https://10.10.68.200:3000
+- WiFi khác: https://10.10.68.200:3000
+- QR Scanner: https://10.10.68.200:3000/qr-scan
+- Reports: https://10.10.68.200:3000/reports
+- Admin: https://10.10.68.200:3000/admin-dashboard
+- Employee: https://10.10.68.200:3000/employee-dashboard
+
+🌐 NGROK BACKEND:
+================
+- API: https://semiprivate-interlamellar-phillis.ngrok-free.dev/api/
+- Ảnh: https://semiprivate-interlamellar-phillis.ngrok-free.dev/uploads/
+- Docs: https://semiprivate-interlamellar-phillis.ngrok-free.dev/docs
+
+🛑 DỪNG HỆ THỐNG:
+================
+./stop-system.sh
+
+📊 LOGS:
+========
+- Backend: tail -f backend.log
+- Frontend: tail -f frontend.log
+- Ngrok: tail -f ngrok.log
+
+⏰ Thời gian khởi động: Wed Oct  8 09:10:27 +07 2025

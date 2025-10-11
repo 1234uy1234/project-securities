@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Check-in Simple - Port 5173</title>
+</head>
+<body>
+    <h1>Test Check-in với ảnh thật</h1>
+    <input type="file" id="photoInput" accept="image/*">
+    <button id="checkinBtn">Check-in</button>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('checkinBtn').addEventListener('click', async () => {
+            const photoInput = document.getElementById('photoInput');
+            const result = document.getElementById('result');
+            const file = photoInput.files[0];
+
+            if (!file) {
+                result.innerHTML = '❌ Vui lòng chọn ảnh';
+                return;
+            }
+
+            result.innerHTML = '⏳ Đang gửi...';
+
+            const formData = new FormData();
+            formData.append('qr_data', 'test_real_photo');
+            formData.append('photo', file, file.name);
+            formData.append('notes', 'Test với ảnh thật');
+
+            try {
+                const response = await fetch('https://10.10.68.72:8000/api/checkin/simple', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJodW5nIiwiZXhwIjoxNzU5MTM5ODQwfQ.8EvdfCt6L1H8CB6ddpyuplQ2xULZDCm-qRhqRBlBRYo'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (data.photo_url) {
+                    result.innerHTML = `✅ Thành công!<br>
+                        Photo URL: ${data.photo_url}<br>
+                        Check-in time: ${data.check_in_time}<br>
+                        Task: ${data.task_title}`;
+                } else {
+                    result.innerHTML = `❌ Thất bại: ${data.message || 'Không có photo_url'}`;
+                }
+            } catch (error) {
+                result.innerHTML = `❌ Lỗi: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>

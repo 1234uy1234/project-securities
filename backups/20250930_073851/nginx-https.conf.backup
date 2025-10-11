@@ -1,0 +1,187 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    # MIME types
+    types {
+        text/html                             html htm shtml;
+        text/css                              css;
+        text/xml                              xml;
+        image/gif                             gif;
+        image/jpeg                            jpeg jpg;
+        image/png                             png;
+        image/svg+xml                         svg svgz;
+        image/webp                            webp;
+        image/x-icon                          ico;
+        application/javascript                js;
+        application/json                      json;
+        application/pdf                       pdf;
+        application/zip                       zip;
+        font/woff                             woff;
+        font/woff2                            woff2;
+        application/vnd.ms-fontobject         eot;
+        application/x-font-ttf                ttf;
+        font/opentype                         otf;
+    }
+    
+    default_type  application/octet-stream;
+    
+    # Temp directories
+    client_body_temp_path /Users/maybe/Documents/shopee/nginx_temp/client_body_temp;
+    proxy_temp_path /Users/maybe/Documents/shopee/nginx_temp/proxy_temp;
+    fastcgi_temp_path /Users/maybe/Documents/shopee/nginx_temp/fastcgi_temp;
+    uwsgi_temp_path /Users/maybe/Documents/shopee/nginx_temp/uwsgi_temp;
+    scgi_temp_path /Users/maybe/Documents/shopee/nginx_temp/scgi_temp;
+    
+    # Logging
+    access_log /Users/maybe/Documents/shopee/nginx_access.log;
+    error_log /Users/maybe/Documents/shopee/nginx_error.log;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+    
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+    
+    # Upstream backend
+    upstream backend {
+        server 10.10.68.72:8000;
+        keepalive 32;
+    }
+    
+    # HTTP server - redirect to HTTPS
+    server {
+        listen 80;
+        server_name 10.10.68.72 localhost;
+        
+        # Security headers
+        add_header X-Frame-Options DENY;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+        
+        # Redirect all HTTP to HTTPS
+        return 301 https://$server_name$request_uri;
+    }
+    
+    # HTTPS server
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name 10.10.68.72 localhost;
+        
+        # SSL Configuration
+        ssl_certificate /Users/maybe/Documents/shopee/ssl/server.crt;
+        ssl_certificate_key /Users/maybe/Documents/shopee/ssl/server.key;
+        
+        # SSL Protocols - Only modern TLS
+        ssl_protocols TLSv1.2 TLSv1.3;
+        
+        # SSL Ciphers - Strong encryption only
+        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA;
+        ssl_prefer_server_ciphers on;
+        
+        # SSL Session settings
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
+        ssl_session_tickets off;
+        
+        # OCSP Stapling (disabled for self-signed cert)
+        # ssl_stapling on;
+        # ssl_stapling_verify on;
+        
+        # Security headers
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options DENY;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+        add_header Referrer-Policy "strict-origin-when-cross-origin";
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https:; object-src 'none'; frame-src 'none';";
+        
+        # Uploads - proxy to backend (MUST be before root location)
+        location /uploads/ {
+            proxy_pass https://10.10.68.72:8000/;
+            proxy_ssl_verify off;
+            proxy_ssl_session_reuse on;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Timeouts
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        }
+        
+        # Root directory
+        root /Users/maybe/Documents/shopee/frontend/dist;
+        index index.html;
+        
+        # Static files
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            add_header X-Content-Type-Options nosniff;
+        }
+        
+        # Frontend routes - serve React app
+        location / {
+            try_files $uri $uri/ /index.html;
+            
+            # Security headers for HTML
+            add_header X-Frame-Options DENY;
+            add_header X-Content-Type-Options nosniff;
+            add_header X-XSS-Protection "1; mode=block";
+        }
+        
+        # API routes - proxy to backend
+        location /api/ {
+            # Rate limiting
+            limit_req zone=api burst=20 nodelay;
+            
+            # Proxy to backend (keep /api prefix)
+            proxy_pass https://10.10.68.72:8000/api/;
+            proxy_ssl_verify off;
+            proxy_ssl_session_reuse on;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Port $server_port;
+            
+            # Timeouts
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+            
+            # CORS headers - Let backend handle CORS
+            
+            # Let backend handle all CORS including OPTIONS
+        }
+        
+        
+        # Health check
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Deny access to hidden files
+        location ~ /\. {
+            deny all;
+            access_log off;
+            log_not_found off;
+        }
+    }
+}

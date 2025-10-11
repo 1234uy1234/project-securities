@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear All Cache - MANHTOAN Patrol System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .button {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 20px;
+            margin: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255,71,87,0.3);
+        }
+        .button:hover {
+            background: #ff3742;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255,71,87,0.4);
+        }
+        .countdown {
+            font-size: 28px;
+            color: #ffa502;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+        }
+        .success { background: rgba(46, 204, 113, 0.3); }
+        .error { background: rgba(231, 76, 60, 0.3); }
+        .info { background: rgba(52, 152, 219, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear All Cache</h1>
+        <p>Xóa toàn bộ cache và Service Worker để đảm bảo dữ liệu mới nhất</p>
+        
+        <button class="button" onclick="clearAll()">💥 XÓA TẤT CẢ NGAY</button>
+        
+        <div id="countdown" class="countdown"></div>
+        <div id="status" class="status info">Sẵn sàng xóa cache...</div>
+        
+        <div style="margin-top: 30px; font-size: 14px; opacity: 0.8;">
+            <p>Hoặc nhấn <kbd>Ctrl + Shift + R</kbd> để hard refresh</p>
+        </div>
+    </div>
+
+    <script>
+        let countdown = 0;
+        let isRunning = false;
+
+        async function clearAll() {
+            if (isRunning) return;
+            isRunning = true;
+            
+            const status = document.getElementById('status');
+            const countdownEl = document.getElementById('countdown');
+            
+            try {
+                status.innerHTML = '🔄 Đang xóa Service Worker...';
+                
+                // Clear Service Worker
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
+                        console.log('✅ Service Worker unregistered');
+                    }
+                    status.innerHTML = '✅ Đã xóa Service Worker';
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+                status.innerHTML = '🔄 Đang xóa Cache...';
+
+                // Clear Cache
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (let cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                        console.log('✅ Cache deleted:', cacheName);
+                    }
+                    status.innerHTML = '✅ Đã xóa ' + cacheNames.length + ' cache';
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+                status.innerHTML = '🔄 Đang xóa Local Storage...';
+
+                // Clear Storage
+                localStorage.clear();
+                sessionStorage.clear();
+                status.innerHTML = '✅ Đã xóa Local Storage';
+                status.className = 'status success';
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Start countdown
+                countdown = 3;
+                countdownEl.style.display = 'block';
+                
+                const timer = setInterval(() => {
+                    countdownEl.textContent = `Tự động reload trong ${countdown} giây...`;
+                    countdown--;
+                    
+                    if (countdown < 0) {
+                        clearInterval(timer);
+                        countdownEl.style.display = 'none';
+                        status.innerHTML = '🚀 Đang reload trang...';
+                        window.location.href = '/';
+                    }
+                }, 1000);
+
+            } catch (error) {
+                status.innerHTML = '❌ Lỗi: ' + error.message;
+                status.className = 'status error';
+                isRunning = false;
+            }
+        }
+
+        // Auto start countdown after 5 seconds
+        setTimeout(() => {
+            if (!isRunning) {
+                countdown = 5;
+                const countdownEl = document.getElementById('countdown');
+                countdownEl.style.display = 'block';
+                
+                const timer = setInterval(() => {
+                    countdownEl.textContent = `Tự động xóa cache trong ${countdown} giây...`;
+                    countdown--;
+                    
+                    if (countdown < 0) {
+                        clearInterval(timer);
+                        countdownEl.style.display = 'none';
+                        clearAll();
+                    }
+                }, 1000);
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

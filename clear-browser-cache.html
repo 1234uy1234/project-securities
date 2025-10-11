@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Browser Cache</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            text-align: center;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button.danger {
+            background: #dc3545;
+        }
+        .button.danger:hover {
+            background: #c82333;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear Browser Cache</h1>
+        
+        <div class="info">
+            <strong>Hướng dẫn:</strong><br>
+            1. Nhấn nút "Clear Cache" để xóa cache<br>
+            2. Sau đó truy cập lại ứng dụng<br>
+            3. Ảnh sẽ hiển thị đúng với IP mới
+        </div>
+
+        <button class="button" onclick="clearCache()">🧹 Clear Cache</button>
+        
+        <a href="https://10.10.68.15:5173" class="button">🚀 Truy cập ứng dụng</a>
+        
+        <button class="button danger" onclick="clearAllData()">🗑️ Clear All Data (Cẩn thận!)</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        function clearCache() {
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                    }
+                });
+            }
+            
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            document.getElementById('status').innerHTML = 
+                '<div style="background: #d4edda; padding: 10px; border-radius: 5px; color: #155724; margin-top: 10px;">✅ Đã xóa cache thành công!</div>';
+        }
+        
+        function clearAllData() {
+            if (confirm('Bạn có chắc muốn xóa tất cả dữ liệu? Điều này sẽ xóa cả thông tin đăng nhập!')) {
+                clearCache();
+                
+                // Clear IndexedDB
+                if ('indexedDB' in window) {
+                    indexedDB.databases().then(databases => {
+                        databases.forEach(db => {
+                            indexedDB.deleteDatabase(db.name);
+                        });
+                    });
+                }
+                
+                document.getElementById('status').innerHTML = 
+                    '<div style="background: #d4edda; padding: 10px; border-radius: 5px; color: #155724; margin-top: 10px;">✅ Đã xóa tất cả dữ liệu!</div>';
+            }
+        }
+    </script>
+</body>
+</html>

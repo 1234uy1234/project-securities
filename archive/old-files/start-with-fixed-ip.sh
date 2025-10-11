@@ -1,0 +1,84 @@
+#!/bin/bash
+
+echo "🔒 KHỞI ĐỘNG VỚI IP TĨNH 100%"
+echo "==============================="
+
+# IP cố định - KHÔNG BAO GIỜ THAY ĐỔI
+FIXED_IP="localhost"
+
+echo "📍 IP cố định: $FIXED_IP"
+echo "⚠️  CẢNH BÁO: IP này đã được cố định và sẽ KHÔNG thay đổi!"
+
+# Dừng tất cả process cũ
+echo "🛑 Dừng các process cũ..."
+pkill -f "python.*app" 2>/dev/null
+pkill -f "npm.*dev" 2>/dev/null
+pkill -f "uvicorn" 2>/dev/null
+pkill -f "vite" 2>/dev/null
+sleep 3
+
+# Khởi động backend với IP cố định
+echo "🔧 Khởi động Backend với IP cố định..."
+cd backend
+python -m uvicorn app.main:app --host $FIXED_IP --port 8000 --ssl-keyfile ../ssl/server.key --ssl-certfile ../ssl/server.crt &
+BACKEND_PID=$!
+
+# Đợi backend khởi động
+echo "⏳ Đợi backend khởi động..."
+sleep 5
+
+# Khởi động frontend với IP cố định
+echo "🎨 Khởi động Frontend với IP cố định..."
+cd ../frontend
+VITE_API_BASE_URL=https://$FIXED_IP:8000 npm run dev -- --host localhost --port 5173 --https &
+FRONTEND_PID=$!
+
+# Đợi frontend khởi động
+echo "⏳ Đợi frontend khởi động..."
+sleep 8
+
+# Test kết nối
+echo "🔍 Test kết nối..."
+curl -k -I "https://$FIXED_IP:8000/health" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "✅ Backend HTTPS: OK"
+else
+    echo "❌ Backend HTTPS: FAIL"
+fi
+
+curl -k -I "https://localhost:5173" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "✅ Frontend HTTPS: OK"
+else
+    echo "❌ Frontend HTTPS: FAIL"
+fi
+
+echo ""
+echo "🎯 ỨNG DỤNG ĐÃ KHỞI ĐỘNG VỚI IP TĨNH:"
+echo "   Frontend: https://localhost:5173"
+echo "   Backend:  https://$FIXED_IP:8000"
+echo "   API Docs: https://$FIXED_IP:8000/docs"
+echo ""
+echo "🔐 Thông tin đăng nhập:"
+echo "   Username: admin"
+echo "   Password: admin123"
+echo ""
+echo "⚠️  LƯU Ý: IP $FIXED_IP đã được cố định và sẽ KHÔNG thay đổi!"
+echo "📱 Để dừng ứng dụng, nhấn Ctrl+C"
+
+# Cleanup function
+cleanup() {
+    echo ""
+    echo "🛑 Đang dừng ứng dụng..."
+    kill $BACKEND_PID 2>/dev/null
+    kill $FRONTEND_PID 2>/dev/null
+    pkill -f "uvicorn" 2>/dev/null
+    pkill -f "npm.*dev" 2>/dev/null
+    echo "✅ Đã dừng tất cả services"
+    exit
+}
+
+trap cleanup SIGINT SIGTERM
+
+# Keep script running
+wait

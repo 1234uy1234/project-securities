@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head><title>Clear Storage Final</title></head>
+<body>
+<h1>Clearing All Storage...</h1>
+<script>
+// Clear everything
+localStorage.clear();
+sessionStorage.clear();
+
+// Clear IndexedDB
+if ('indexedDB' in window) {
+    indexedDB.databases().then(databases => {
+        databases.forEach(db => {
+            indexedDB.deleteDatabase(db.name);
+        });
+    });
+}
+
+// Clear cookies
+document.cookie.split(";").forEach(function(c) { 
+    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+});
+
+console.log('All storage cleared!');
+document.body.innerHTML = '<h1>✅ All storage cleared! Close this tab and try the main app.</h1>';
+</script>
+</body>
+</html>

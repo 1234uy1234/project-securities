@@ -1,0 +1,83 @@
+#!/bin/bash
+
+echo "🔧 TEST CAMERA SELFIE FIX"
+echo "=========================="
+
+# Kiểm tra frontend đang chạy
+echo "📱 Kiểm tra frontend..."
+if curl -s -k https://10.10.68.200:5173 > /dev/null; then
+    echo "✅ Frontend đang chạy trên https://10.10.68.200:5173"
+else
+    echo "❌ Frontend không chạy. Vui lòng khởi động frontend trước."
+    exit 1
+fi
+
+# Kiểm tra backend đang chạy
+echo "🔧 Kiểm tra backend..."
+if curl -s -k https://10.10.68.200:8000/health > /dev/null; then
+    echo "✅ Backend đang chạy trên https://10.10.68.200:8000"
+else
+    echo "❌ Backend không chạy. Vui lòng khởi động backend trước."
+    exit 1
+fi
+
+echo ""
+echo "🎯 HƯỚNG DẪN TEST CAMERA SELFIE:"
+echo "================================"
+echo ""
+echo "1. 📱 Mở trình duyệt và truy cập:"
+echo "   https://10.10.68.200:5173"
+echo ""
+echo "2. 🔐 Đăng nhập với tài khoản admin"
+echo ""
+echo "3. 📷 Vào trang QR Scanner:"
+echo "   https://10.10.68.200:5173/qr-scan"
+echo ""
+echo "4. 🎯 Test camera selfie:"
+echo "   - Quét QR code bất kỳ"
+echo "   - Bấm 'Bật Camera' trong phần 'Chụp ảnh xác nhận'"
+echo "   - Thử chuyển đổi giữa camera sau và camera selfie"
+echo "   - Test chụp ảnh với camera selfie"
+echo ""
+echo "5. 🧪 Test file HTML độc lập:"
+echo "   Mở file: test_camera_selfie.html trong trình duyệt"
+echo ""
+echo "🔍 CÁC LỖI THƯỜNG GẶP VÀ CÁCH SỬA:"
+echo "=================================="
+echo ""
+echo "❌ 'Camera selfie bị từ chối'"
+echo "   → Cho phép camera trong trình duyệt"
+echo "   → Kiểm tra cài đặt quyền camera"
+echo ""
+echo "❌ 'Không tìm thấy camera selfie'"
+echo "   → Kiểm tra thiết bị có camera trước không"
+echo "   → Thử trên thiết bị khác"
+echo ""
+echo "❌ 'Camera selfie đang được sử dụng'"
+echo "   → Đóng các ứng dụng khác đang dùng camera"
+echo "   → Restart trình duyệt"
+echo ""
+echo "❌ 'Camera selfie timeout'"
+echo "   → Kiểm tra kết nối mạng"
+echo "   → Thử lại sau vài giây"
+echo ""
+echo "✅ CẢI TIẾN ĐÃ THỰC HIỆN:"
+echo "========================"
+echo ""
+echo "1. 🔧 Tăng timeout từ 3s → 5s cho camera selfie"
+echo "2. 🛡️ Thêm fallback constraints đơn giản hơn"
+echo "3. ⏱️ Thêm delay 300ms giữa các lần khởi động camera"
+echo "4. 📝 Cải thiện thông báo lỗi cụ thể cho camera selfie"
+echo "5. 🔄 Thêm nút 'Đổi Camera' khi gặp lỗi"
+echo "6. 🎯 Thêm constraints tối ưu cho mobile"
+echo ""
+echo "🚀 BẮT ĐẦU TEST..."
+echo "=================="
+echo ""
+echo "Mở trình duyệt và test theo hướng dẫn trên!"
+echo ""
+echo "📞 Nếu vẫn gặp lỗi, hãy:"
+echo "   1. Kiểm tra console log trong DevTools"
+echo "   2. Thử trên thiết bị khác"
+echo "   3. Kiểm tra quyền camera trong trình duyệt"
+echo ""

@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@example.com",
+    "password_hash": "$2b$12$N/TDjffb7qh1Hx9eUj9kRuU7vVc9ta87MnlZmwAt9HNZISBOrCSK6",
+    "role": "admin",
+    "full_name": "Administrator",
+    "phone": null,
+    "is_active": 1,
+    "created_at": "2025-09-25 03:27:41",
+    "updated_at": "2025-09-25 03:27:41"
+  },
+  {
+    "id": 12,
+    "username": "hung",
+    "email": "hung@example.com",
+    "password_hash": "$2b$12$OIOwTnnFiY8r.sl54l0dVOdNeOdNwGbRSwk4/9TFDo6ZkiLRfo2dW",
+    "role": "employee",
+    "full_name": "Nguyễn Văn Hùng",
+    "phone": "0123456789",
+    "is_active": 1,
+    "created_at": "2025-09-25 06:46:29",
+    "updated_at": "2025-09-25 06:46:29"
+  },
+  {
+    "id": 13,
+    "username": "minh",
+    "email": "minh@gmail.com",
+    "password_hash": "$2b$12$LTTa7AX2it6Y2Kq/OC0QRel5k1sTzmtFZc2hyuccUQUSTAIkLVUD2",
+    "role": "employee",
+    "full_name": "nguyen van minh",
+    "phone": null,
+    "is_active": 1,
+    "created_at": "2025-10-01 06:02:32",
+    "updated_at": null
+  }
+]

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API</title>
+</head>
+<body>
+    <h1>Test API Endpoints</h1>
+    <button onclick="testAPI()">Test API</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.textContent = 'Testing...\n';
+            
+            try {
+                // Test locations
+                const loc = await fetch('https://semiprivate-interlamellar-phillis.ngrok-free.dev/api/locations/');
+                result.textContent += 'Locations: ' + loc.status + '\n';
+                
+                // Test patrol-records
+                const rec = await fetch('https://semiprivate-interlamellar-phillis.ngrok-free.dev/api/patrol-records/');
+                result.textContent += 'Patrol Records: ' + rec.status + '\n';
+                
+                result.textContent += '\nAll tests completed!';
+            } catch (e) {
+                result.textContent += '\nError: ' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>

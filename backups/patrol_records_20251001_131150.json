@@ -1,0 +1,28 @@
+[
+  {
+    "id": 17,
+    "user_id": 1,
+    "location_id": 37,
+    "check_in_time": "2025-09-30T18:30:19.137220+07:00",
+    "check_out_time": null,
+    "notes": "Chấm công đơn giản - QR: nhà đi chơi",
+    "photo_path": null,
+    "updated_at": null,
+    "task_id": null,
+    "gps_latitude": null,
+    "gps_longitude": null
+  },
+  {
+    "id": 18,
+    "user_id": 2,
+    "location_id": 39,
+    "check_in_time": "2025-09-30T20:11:03.877423+07:00",
+    "check_out_time": null,
+    "notes": "Chấm công đơn giản - QR: nhà xe",
+    "photo_path": null,
+    "updated_at": null,
+    "task_id": null,
+    "gps_latitude": null,
+    "gps_longitude": null
+  }
+]

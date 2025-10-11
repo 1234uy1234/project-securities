@@ -1,0 +1,102 @@
+#!/bin/bash
+
+echo "🧹 CLEAN RESTART - Dừng tất cả và khởi động lại sạch sẽ"
+echo "========================================================"
+
+# 1. Dừng TẤT CẢ process liên quan
+echo "🛑 Dừng tất cả process..."
+pkill -f "uvicorn" || true
+pkill -f "vite" || true
+pkill -f "node.*5173" || true
+pkill -f "node.*5174" || true
+pkill -f "python.*app.py" || true
+pkill -f "python.*main" || true
+
+# Đợi tất cả process dừng hoàn toàn
+echo "⏳ Đợi process dừng hoàn toàn..."
+sleep 5
+
+# 2. Kiểm tra port còn bị chiếm không
+echo "🔍 Kiểm tra port..."
+if lsof -i :5173 > /dev/null 2>&1; then
+    echo "❌ Port 5173 vẫn bị chiếm, force kill..."
+    lsof -ti :5173 | xargs kill -9 2>/dev/null || true
+fi
+
+if lsof -i :8000 > /dev/null 2>&1; then
+    echo "❌ Port 8000 vẫn bị chiếm, force kill..."
+    lsof -ti :8000 | xargs kill -9 2>/dev/null || true
+fi
+
+# Đợi thêm
+sleep 3
+
+# 3. Kiểm tra lại
+echo "🔍 Kiểm tra lại port..."
+if lsof -i :5173 > /dev/null 2>&1; then
+    echo "❌ Port 5173 vẫn bị chiếm!"
+    exit 1
+fi
+
+if lsof -i :8000 > /dev/null 2>&1; then
+    echo "❌ Port 8000 vẫn bị chiếm!"
+    exit 1
+fi
+
+echo "✅ Tất cả port đã được giải phóng!"
+
+# 4. Khởi động backend
+echo "🔧 Khởi động backend..."
+cd /Users/maybe/Documents/shopee/backend
+source venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --ssl-keyfile ../ssl/server.key --ssl-certfile ../ssl/server.crt --reload > backend.log 2>&1 &
+BACKEND_PID=$!
+echo "Backend PID: $BACKEND_PID"
+
+# Đợi backend khởi động
+echo "⏳ Đợi backend khởi động..."
+sleep 5
+
+# Kiểm tra backend
+if curl -k -s https://localhost:8000/health | grep -q "healthy"; then
+    echo "✅ Backend khởi động thành công!"
+else
+    echo "❌ Backend khởi động thất bại!"
+    exit 1
+fi
+
+# 5. Khởi động frontend
+echo "🎨 Khởi động frontend..."
+cd /Users/maybe/Documents/shopee/frontend
+npm run dev -- --host 0.0.0.0 --port 5173 --https > frontend.log 2>&1 &
+FRONTEND_PID=$!
+echo "Frontend PID: $FRONTEND_PID"
+
+# Đợi frontend khởi động
+echo "⏳ Đợi frontend khởi động..."
+sleep 5
+
+# Kiểm tra frontend
+if curl -k -s https://localhost:5173 > /dev/null; then
+    echo "✅ Frontend khởi động thành công!"
+else
+    echo "❌ Frontend khởi động thất bại!"
+    exit 1
+fi
+
+# 6. Test hệ thống
+echo "🧪 Test hệ thống..."
+cd /Users/maybe/Documents/shopee
+./quick-test.sh
+
+echo ""
+echo "🎉 CLEAN RESTART HOÀN TẤT!"
+echo "=========================="
+echo "📱 Frontend: https://localhost:5173"
+echo "🔧 Backend: https://localhost:8000"
+echo "📊 API Docs: https://localhost:8000/docs"
+echo ""
+echo "🛑 Để dừng hệ thống:"
+echo "   kill $BACKEND_PID $FRONTEND_PID"
+echo ""
+echo "💡 Hoặc chạy: ./clean-restart.sh để restart lại"

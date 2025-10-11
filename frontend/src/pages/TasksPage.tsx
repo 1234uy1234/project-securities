@@ -1,0 +1,1507 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Edit, Trash2, QrCode, Download, Printer, MapPin, Eye, X, CheckCircle, Clock, Calendar } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
+import { toast } from 'react-hot-toast';
+import { api } from '../utils/api';
+import { getQRCodeUrl } from '../utils/config';
+import TimeRangePicker from '../components/TimeRangePicker';
+import QRCodeLib from 'qrcode';
+
+interface Location {
+  id: number;
+  name: string;
+  description?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface PatrolTask {
+  id: number;
+  title: string;
+  description?: string;
+  assigned_to?: number | { id: number; full_name: string };
+  status: 'pending' | 'in_progress' | 'completed';
+  due_date?: string;
+  location_id?: number | { id: number; name: string };
+  schedule_week?: string;
+  created_at: string;
+  stops?: Array<{
+    location_id: number;
+    location_name: string;
+    sequence: number;
+    required: boolean;
+    scheduled_time?: string;
+    visited: boolean;
+    visited_at?: string;
+  }>;
+}
+
+interface QRCode {
+  id: number;
+  content: string;  // Sửa từ data thành content để phù hợp với database
+  type: 'static' | 'dynamic';
+  location_name?: string;
+  created_at: string;
+}
+
+// Component nút hoàn thành nhiệm vụ trong modal với kiểm tra trạng thái
+const TaskCompleteButtonModal: React.FC<{ taskId: number; onComplete: (taskId: number) => void }> = ({ taskId, onComplete }) => {
+  const [completionStatus, setCompletionStatus] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkCompletionStatus = async () => {
+      try {
+        const response = await api.get(`/patrol-tasks/${taskId}/completion-status`);
+        setCompletionStatus(response.data);
+      } catch (error) {
+        console.error('Error checking completion status:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkCompletionStatus();
+  }, [taskId]);
+
+  if (loading) {
+    return <div className="text-sm text-gray-500">Đang kiểm tra...</div>;
+  }
+
+  if (!completionStatus) {
+    return <div className="text-sm text-red-500">Không thể kiểm tra trạng thái</div>;
+  }
+
+  const canComplete = completionStatus.can_complete;
+  const missingStops = completionStatus.missing_stops || [];
+
+  return (
+    <div className="space-y-3">
+      {canComplete ? (
+    <button
+      onClick={() => onComplete(taskId)}
+          className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center justify-center space-x-2"
+    >
+      <CheckCircle className="w-4 h-4" />
+          <span>Hoàn thành nhiệm vụ</span>
+    </button>
+      ) : (
+        <div className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded-lg">
+          <p className="font-medium mb-2">Chưa thể hoàn thành:</p>
+          <ul className="list-disc list-inside space-y-1">
+            {missingStops.map((stop: any, index: number) => (
+              <li key={index}>
+                {stop.location_name} {stop.scheduled_time && `(${stop.scheduled_time})`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Component nút hoàn thành nhiệm vụ đơn giản
+const TaskCompleteButton: React.FC<{ taskId: number; onComplete: (taskId: number) => void }> = ({ taskId, onComplete }) => {
+  const [showModal, setShowModal] = useState(false);
+
+    return (
+    <>
+    <button
+        onClick={() => setShowModal(true)}
+        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
+      title="Hoàn thành nhiệm vụ"
+    >
+      <CheckCircle className="w-4 h-4" />
+        <span>Hoàn thành</span>
+    </button>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Hoàn thành nhiệm vụ</h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+        </div>
+            
+            <TaskCompleteButtonModal 
+              taskId={taskId} 
+              onComplete={(id) => {
+                onComplete(id);
+                setShowModal(false);
+              }} 
+            />
+        </div>
+              </div>
+            )}
+    </>
+  );
+};
+
+const TasksPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const [activeTab, setActiveTab] = useState<'tasks' | 'qr'>('tasks');
+  // Helper functions for task properties
+  const getTaskStatusColor = (task: any) => {
+    if (task.status === 'completed') return 'green';
+    if (task.status === 'in_progress') return 'blue';
+    if (task.status === 'pending') return 'yellow';
+    if (task.status === 'overdue') return 'red';
+    return 'gray';
+  };
+
+  const getTaskStatusText = (task: any) => {
+    if (task.status === 'completed') return 'Hoàn thành';
+    if (task.status === 'in_progress') return 'Đang thực hiện';
+    if (task.status === 'pending') return 'Chờ thực hiện';
+    if (task.status === 'overdue') return 'Quá hạn';
+    return 'Không xác định';
+  };
+
+  const getTaskLocationName = (task: any): string => {
+    return task.location?.name || 'Không xác định';
+  };
+
+  const [tasks, setTasks] = useState<PatrolTask[]>([]);
+  const [qrCodes, setQrCodes] = useState<QRCode[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<PatrolTask | null>(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [selectedQRCode, setSelectedQRCode] = useState<QRCode | null>(null);
+  const [showCreateQRModal, setShowCreateQRModal] = useState(false);
+  const [qrData, setQrData] = useState({
+    data: '',
+    type: 'static' as 'static' | 'dynamic',
+    location_id: ''
+  });
+
+  // Form states
+  const [taskData, setTaskData] = useState({
+    title: '',
+    description: '',
+    assigned_to: '',
+    due_date: '',
+    location_id: '',
+    schedule_week: ''
+  });
+  
+  const [stops, setStops] = useState<Array<{ qr_code_id: string; qr_code_name: string; scheduled_time: string }>>([{ qr_code_id: '', qr_code_name: '', scheduled_time: '' }]);
+
+  // Callbacks để tránh infinite loop
+  const handleScheduleChange = useCallback((value: string) => {
+    setTaskData(prev => ({ ...prev, schedule_week: value }));
+  }, []);
+
+  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setTaskData(prev => ({ ...prev, title: e.target.value }));
+  }, []);
+
+  const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setTaskData(prev => ({ ...prev, description: e.target.value }));
+  }, []);
+
+  const handleAssignedToChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setTaskData(prev => ({ ...prev, assigned_to: e.target.value }));
+  }, []);
+
+
+  const isManagerOrAdmin = user?.role === 'manager' || user?.role === 'admin';
+
+  useEffect(() => {
+    fetchTasks();
+    if (isManagerOrAdmin) {
+    fetchLocations();
+    fetchUsers();
+    fetchQRCodes();
+    }
+  }, [isManagerOrAdmin]);
+
+  const fetchTasks = async () => {
+    try {
+      // Get auth token
+      const token = localStorage.getItem('auth-storage') ? 
+        JSON.parse(localStorage.getItem('auth-storage')!).state.token : null;
+      
+      if (!token) {
+        console.log('No token found for fetching tasks');
+        return;
+      }
+
+      // Load tasks based on user role
+      let response;
+      if (user?.role === 'employee') {
+        // Employee chỉ xem nhiệm vụ được giao
+        response = await api.get('/patrol-tasks/my-tasks');
+      } else {
+        // Admin/Manager xem tất cả nhiệm vụ
+        response = await api.get('/patrol-tasks/');
+      }
+      
+      const tasks = response.data || [];
+      
+      // Cập nhật trạng thái real-time cho từng task
+      const updatedTasks = tasks.map((task: any) => {
+        const realTimeStatus = getTaskRealTimeStatus(task);
+        return {
+          ...task,
+          status: realTimeStatus.status,
+          statusText: realTimeStatus.text,
+          statusColor: realTimeStatus.color
+        };
+      });
+      
+      setTasks(updatedTasks);
+    } catch (error: any) {
+      console.error('Error fetching tasks:', error);
+      // Nếu lỗi authentication, redirect về login
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        console.log('Authentication error, redirecting to login')
+        useAuthStore.getState().logout()
+        window.location.href = '/'
+        return
+      }
+      toast.error('Không thể tải danh sách nhiệm vụ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hàm kiểm tra trạng thái real-time của task
+  const getTaskRealTimeStatus = (task: any) => {
+    const now = new Date();
+    // Sử dụng timezone Việt Nam trực tiếp
+    const vietnamTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
+    const currentDate = vietnamTime.toISOString().split('T')[0];
+    const currentTime = vietnamTime.getHours() * 60 + vietnamTime.getMinutes();
+    
+    console.log('=== TASK STATUS DEBUG (TasksPage) ===');
+    console.log('Task:', task.title);
+    console.log('Current time (Vietnam):', vietnamTime.toLocaleString('vi-VN'));
+    console.log('Current time (minutes):', currentTime);
+    console.log('Current date:', currentDate);
+    
+    // Lấy ngày của task từ created_at (giống EmployeeDashboard)
+    let taskDate = null;
+    try {
+      if (task.created_at) {
+        const taskCreatedDate = new Date(task.created_at);
+        taskDate = taskCreatedDate.toISOString().split('T')[0];
+        console.log(`Task created_at: ${task.created_at}, parsed date: ${taskDate}`);
+      }
+    } catch (e) {
+      console.log('Error parsing task date:', e);
+    }
+    
+    // Kiểm tra ngày của task so với ngày hiện tại
+    const isToday = taskDate === currentDate;
+    const isPastTask = taskDate && taskDate < currentDate; // Task hôm qua hoặc trước đó
+    const isFutureTask = taskDate && taskDate > currentDate; // Task tương lai
+    
+    // Nếu đã hoàn thành thực sự từ backend
+    if (task.status === 'completed') {
+      console.log('Status: COMPLETED (from backend)');
+      return { status: 'completed', text: '✅ Hoàn thành', color: 'green' };
+    }
+    
+    // Xử lý task quá khứ (hôm qua hoặc trước đó) - CHỈ nếu chưa hoàn thành
+    if (isPastTask) {
+      // Nếu task đã hoàn thành từ backend, giữ nguyên trạng thái completed
+      if (task.status === 'completed') {
+        console.log('✅ PAST TASK COMPLETED: Task hôm qua đã hoàn thành');
+        return { status: 'completed', text: '✅ Hoàn thành', color: 'green' };
+      } else {
+        console.log('🔴 PAST TASK OVERDUE: Task hôm qua chưa chấm công');
+        return { status: 'overdue', text: '🔴 Quá hạn', color: 'red' };
+      }
+    }
+    
+    // Xử lý task tương lai
+    if (isFutureTask) {
+      return { status: 'pending', text: '⏳ Chưa đến ngày', color: 'gray' };
+    }
+    
+    // Xử lý task hôm nay
+    if (isToday) {
+      // Lấy thời gian bắt đầu và kết thúc từ stops
+      let startTime = null;
+      let endTime = null;
+      
+      if (task.stops && task.stops.length > 0) {
+        // Tìm thời gian sớm nhất (bắt đầu)
+        const startStop = task.stops.reduce((earliest: any, stop: any) => {
+          if (stop.scheduled_time) {
+            const [hours, minutes] = stop.scheduled_time.split(':').map(Number);
+            const time = hours * 60 + minutes;
+            if (!earliest || time < earliest.time) {
+              return { time, stop };
+            }
+          }
+          return earliest;
+        }, null);
+        
+        // Tìm thời gian muộn nhất (kết thúc)
+        const endStop = task.stops.reduce((latest: any, stop: any) => {
+          if (stop.scheduled_time) {
+            const [hours, minutes] = stop.scheduled_time.split(':').map(Number);
+            const time = hours * 60 + minutes;
+            if (!latest || time > latest.time) {
+              return { time, stop };
+            }
+          }
+          return latest;
+        }, null);
+        
+        if (startStop) startTime = startStop.time;
+        if (endStop) endTime = endStop.time;
+      }
+      
+      if (startTime && endTime) {
+        // Thêm 15 phút buffer cho thời gian kết thúc (giống EmployeeDashboard)
+        const endTimeWithBuffer = endTime + 15;
+        
+        console.log('Start time (minutes):', startTime);
+        console.log('End time (minutes):', endTime);
+        console.log('End time with buffer:', endTimeWithBuffer);
+        console.log('Current < Start?', currentTime < startTime);
+        console.log('Current >= Start && <= End?', currentTime >= startTime && currentTime <= endTimeWithBuffer);
+        console.log('Current > End?', currentTime > endTimeWithBuffer);
+        
+        if (task.status === 'completed') {
+          console.log('Status: COMPLETED');
+          return { status: 'completed', text: '✅ Hoàn thành', color: 'green' };
+        } else if (currentTime < startTime) {
+          console.log('Status: PENDING (chưa đến giờ)');
+          return { status: 'pending', text: '⏳ Chờ thực hiện', color: 'blue' };
+        } else if (currentTime >= startTime && currentTime <= endTimeWithBuffer) {
+          console.log('Status: IN_PROGRESS (trong giờ làm việc)');
+          return { status: 'in_progress', text: '🟡 Đang thực hiện', color: 'yellow' };
+        } else {
+          console.log('Status: OVERDUE (quá hạn)');
+          return { status: 'overdue', text: '🔴 Quá hạn', color: 'red' };
+        }
+      } else {
+        // Nếu không có scheduled time, kiểm tra trạng thái gốc
+        if (task.status === 'completed') {
+          return { status: 'completed', text: '✅ Hoàn thành', color: 'green' };
+        } else {
+          return { status: 'pending', text: '⏳ Chờ thực hiện', color: 'blue' };
+        }
+      }
+    }
+    
+    // Fallback về trạng thái gốc
+    return {
+      status: task.status,
+      text: task.status === 'completed' ? '✅ Hoàn thành' : 
+            task.status === 'in_progress' ? '🔄 Đang thực hiện' : 
+            '⏳ Đang chờ',
+      color: task.status === 'completed' ? 'green' : 
+             task.status === 'in_progress' ? 'blue' : 'yellow'
+    };
+  };
+
+  const fetchLocations = async () => {
+    try {
+      const response = await api.get('/locations/');
+      setLocations(response.data || []);
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await api.get('/users/');
+      setUsers(response.data || []);
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+      // Nếu lỗi authentication, redirect về login
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        console.log('Authentication error, redirecting to login')
+        useAuthStore.getState().logout()
+        window.location.href = '/'
+        return
+      }
+    }
+  };
+
+  const fetchQRCodes = async () => {
+    try {
+      const response = await api.get('/qr-codes/');
+      setQrCodes(response.data || []);
+    } catch (error: any) {
+      console.error('Error fetching QR codes:', error);
+      // Nếu lỗi authentication, redirect về login
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        console.log('Authentication error, redirecting to login')
+        useAuthStore.getState().logout()
+        window.location.href = '/'
+        return
+      }
+    }
+  };
+
+  const completeTask = async (taskId: number) => {
+    try {
+      await api.put(`/patrol-tasks/${taskId}/complete`);
+      toast.success('Nhiệm vụ đã được hoàn thành!');
+      await fetchTasks(); // Refresh task list
+    } catch (error) {
+      console.error('Error completing task:', error);
+      toast.error('Không thể hoàn thành nhiệm vụ');
+    }
+  };
+
+  const deleteTask = async (taskId: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa nhiệm vụ này?')) {
+        return;
+      }
+
+    try {
+      await api.delete(`/patrol-tasks/${taskId}`);
+      toast.success('Nhiệm vụ đã được xóa!');
+      await fetchTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast.error('Không thể xóa nhiệm vụ');
+    }
+  };
+
+  const generateQRForTask = async (taskId: number) => {
+    try {
+      // Sử dụng API cũ với query parameters
+      const response = await api.post(`/qr-codes/generate?task_id=${taskId}&data=Task ${taskId}&type=task`);
+      toast.success('QR code đã được tạo!');
+      await fetchQRCodes();
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      toast.error('Không thể tạo QR code');
+    }
+  };
+
+  const createQRCode = async () => {
+    try {
+      const response = await api.post('/qr-codes/', {
+        content: qrData.data,
+        qr_type: qrData.type,
+        location: qrData.location || ''
+      });
+      toast.success('QR code đã được tạo!');
+      await fetchQRCodes();
+      setShowCreateQRModal(false);
+      setQrData({ data: '', type: 'static', location_id: '' });
+    } catch (error) {
+      console.error('Error creating QR code:', error);
+      toast.error('Không thể tạo QR code');
+    }
+  };
+
+  const deleteQRCode = async (qrId: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa QR code này?')) {
+      return;
+    }
+    
+    try {
+      await api.delete(`/qr-codes/${qrId}`);
+      toast.success('QR code đã được xóa!');
+      await fetchQRCodes();
+    } catch (error) {
+      console.error('Error deleting QR code:', error);
+      toast.error('Không thể xóa QR code');
+    }
+  };
+
+  const editTask = (task: PatrolTask) => {
+    setEditingTask(task);
+    setTaskData({
+      title: task.title,
+      description: task.description || '',
+      assigned_to: typeof task.assigned_to === 'object' ? task.assigned_to.id.toString() : (task.assigned_to?.toString() || ''),
+      due_date: task.due_date || '',
+      location_id: typeof task.location_id === 'object' ? task.location_id.id.toString() : (task.location_id?.toString() || ''),
+      schedule_week: task.schedule_week || ''
+    });
+    setShowCreateModal(true);
+  };
+
+  const addStop = () => {
+    setStops([...stops, { qr_code_id: '', qr_code_name: '', scheduled_time: '' }]);
+  };
+
+  const removeStop = (index: number) => {
+    if (stops.length > 1) {
+      setStops(stops.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateStop = (index: number, field: 'qr_code_id' | 'qr_code_name' | 'scheduled_time', value: string) => {
+    const newStops = [...stops];
+    newStops[index][field] = value;
+    setStops(newStops);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      // Validate required fields
+      if (!taskData.title || !taskData.title.trim()) {
+        toast.error('Vui lòng nhập tên nhiệm vụ');
+        return;
+      }
+      
+      const validStops = stops.filter(stop => stop.qr_code_name && stop.qr_code_name.trim() && stop.scheduled_time && stop.scheduled_time.trim());
+      
+      console.log('Raw stops:', stops);
+      console.log('Valid stops:', validStops);
+      
+      // ĐƠN GIẢN HÓA: Không cần location_id validation phức tạp
+      const taskPayload = {
+        title: taskData.title,
+        description: taskData.description,
+        assigned_to: taskData.assigned_to ? parseInt(taskData.assigned_to) : 1,  // Default to user ID 1
+        location_id: taskData.location_id || "Vị trí mặc định",  // Đơn giản: chỉ cần tên
+        schedule_week: taskData.schedule_week ? JSON.parse(taskData.schedule_week) : {},  // Parse JSON string to object
+        stops: validStops.length > 0 ? validStops.map((stop, index) => ({
+          qr_code_name: stop.qr_code_name.trim(),
+          scheduled_time: stop.scheduled_time.trim(),
+          required: true
+        })) : []
+      };
+
+      console.log('Sending task payload:', taskPayload);
+      console.log('Stops data:', validStops);
+
+      if (editingTask) {
+        await api.put(`/patrol-tasks/${editingTask.id}`, taskPayload);
+        toast.success('Nhiệm vụ đã được cập nhật!');
+      } else {
+        await api.post('/patrol-tasks/', taskPayload);
+        toast.success('Nhiệm vụ đã được tạo!');
+      }
+
+      setShowCreateModal(false);
+      setEditingTask(null);
+      setTaskData({
+      title: '',
+      description: '',
+      assigned_to: '',
+      due_date: '',
+      location_id: '',
+      schedule_week: ''
+    });
+    setStops([{ qr_code_id: '', qr_code_name: '', scheduled_time: '' }]);
+      await fetchTasks();
+    } catch (error) {
+      console.error('Error saving task:', error);
+      toast.error('Không thể lưu nhiệm vụ');
+    }
+  };
+
+  const downloadQR = async (qrCode: QRCode) => {
+    try {
+      const qrText = qrCode.content || `QR ${qrCode.id}`;
+      
+      // Tạo QR code thực sự
+      const qrDataURL = await QRCodeLib.toDataURL(qrText, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+
+      // Tạo link download
+      const link = document.createElement('a');
+      link.download = `qr-${qrCode.id}-${qrText.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+      link.href = qrDataURL;
+      link.click();
+      
+      toast.success('✅ Đã tải QR code thành công!');
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      toast.error('❌ Lỗi tạo QR code!');
+    }
+  };
+
+  const printQR = async (qrCode: QRCode) => {
+    try {
+      const qrText = qrCode.content || `QR ${qrCode.id}`;
+      
+      // Tạo QR code thực sự
+      const qrDataURL = await QRCodeLib.toDataURL(qrText, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>QR Code - ${qrText}</title>
+              <style>
+                body { 
+                  text-align: center; 
+                  padding: 20px; 
+                  font-family: Arial, sans-serif;
+                }
+                .qr-container {
+                  border: 2px solid #ccc; 
+                  padding: 20px; 
+                  display: inline-block;
+                  margin: 20px 0;
+                }
+                .qr-image {
+                  display: block;
+                  margin: 0 auto 20px auto;
+                }
+                .info {
+                  margin: 10px 0;
+                  font-size: 14px;
+                }
+              </style>
+            </head>
+            <body>
+              <h2>QR Code</h2>
+              <div class="qr-container">
+                <img src="${qrDataURL}" alt="QR Code" class="qr-image" />
+                <div class="info"><strong>Nội dung:</strong> ${qrText}</div>
+                <div class="info"><strong>Tạo lúc:</strong> ${new Date(qrCode.created_at).toLocaleString('vi-VN')}</div>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+        toast.success('✅ Đã mở cửa sổ in QR code!');
+      }
+    } catch (error) {
+      console.error('Error generating QR code for print:', error);
+      toast.error('❌ Lỗi tạo QR code để in!');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+        <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Quản lý Nhiệm vụ & QR Code</h1>
+        <p className="text-gray-600">Quản lý nhiệm vụ tuần tra và tạo mã QR</p>
+        </div>
+
+      {/* Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('tasks')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'tasks'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Nhiệm vụ
+            </button>
+            {isManagerOrAdmin && (
+              <button
+                onClick={() => setActiveTab('qr')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'qr'
+                    ? 'border-green-500 text-green-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                QR Codes
+              </button>
+            )}
+          </nav>
+        </div>
+      </div>
+
+      {activeTab === 'tasks' && (
+        <>
+          {/* Create Task Button - Only for Admin/Manager */}
+          {isManagerOrAdmin && (
+            <div className="mb-6">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tạo nhiệm vụ mới</span>
+              </button>
+            </div>
+          )}
+
+          {/* Create/Edit Task Modal */}
+          {showCreateModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">
+                    {editingTask ? 'Sửa nhiệm vụ' : 'Tạo nhiệm vụ mới'}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setEditingTask(null);
+                      setTaskData({
+                        title: '',
+                        description: '',
+                        assigned_to: '',
+                        due_date: '',
+                        location_id: '',
+                        schedule_week: ''
+                      });
+                      setStops([{ qr_code_id: '', qr_code_name: '', scheduled_time: '' }]);
+                    }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tiêu đề *
+                    </label>
+                    <input
+                      type="text"
+                        value={taskData.title}
+                        onChange={handleTitleChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                        required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mô tả
+                    </label>
+                      <input
+                        type="text"
+                        value={taskData.description}
+                        onChange={handleDescriptionChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Giao cho
+                      </label>
+                      <select
+                        value={taskData.assigned_to}
+                        onChange={handleAssignedToChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="">Chọn người thực hiện</option>
+                        {users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.full_name || user.username}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+
+                  
+                    {/* Đã xóa phần vị trí chính - không cần thiết */}
+                  </div>
+                  
+                  {/* Time Range Picker */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Thời gian thực hiện
+                    </label>
+                    <TimeRangePicker
+                      value={taskData.schedule_week}
+                      onChange={handleScheduleChange}
+                    />
+                  </div>
+
+                  {/* Stops */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Các điểm dừng (Stops)
+                    </label>
+                    <div className="space-y-3">
+                      {stops.map((stop, index) => (
+                        <div key={index} className="flex gap-2 items-end">
+                          <div className="flex-1">
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Vị trí {index + 1}
+                            </label>
+                            <select
+                              value={stop.qr_code_id}
+                              onChange={(e) => {
+                                const selectedQR = qrCodes.find(qr => qr.id.toString() === e.target.value);
+                                updateStop(index, 'qr_code_id', e.target.value);
+                                updateStop(index, 'qr_code_name', selectedQR?.content || selectedQR?.data || selectedQR?.qr_content || '');
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                            >
+                              <option value="">Chọn QR Code...</option>
+                              {qrCodes.map((qr) => (
+                                <option key={qr.id} value={qr.id}>
+                                  {qr.content || qr.data || qr.qr_content || `QR ${qr.id}`} ({qr.type})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="w-32">
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Tên QR Code
+                            </label>
+                            <input
+                              type="text"
+                              value={stop.qr_code_name}
+                              onChange={(e) => updateStop(index, 'qr_code_name', e.target.value)}
+                              placeholder="Tên QR code"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                            />
+                          </div>
+                          <div className="w-24">
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Thời gian
+                            </label>
+                            <input
+                              type="time"
+                              value={stop.scheduled_time}
+                              onChange={(e) => updateStop(index, 'scheduled_time', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                            />
+                          </div>
+                          {stops.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeStop(index)}
+                              className="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 text-sm"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={addStop}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
+                      >
+                        + Thêm điểm dừng
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setShowCreateModal(false);
+                        setEditingTask(null);
+                      }}
+                      className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      {editingTask ? 'Cập nhật' : 'Tạo nhiệm vụ'}
+                    </button>
+                </div>
+              </form>
+              </div>
+            </div>
+          )}
+
+          {/* Task List */}
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 shadow-lg">
+            <h2 className="text-lg font-semibold mb-3">
+              {user?.role === 'employee' ? 'Nhiệm vụ được giao' : 'Danh sách nhiệm vụ'}
+            </h2>
+            
+            {tasks.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {user?.role === 'employee' ? 'Bạn chưa có nhiệm vụ nào được giao' : 'Chưa có nhiệm vụ nào được tạo'}
+              </div>
+            ) : user?.role === 'employee' ? (
+              // Employee view - Flowstep format
+              <div className="space-y-6">
+                {tasks.map((task) => (
+                  <div key={task.id} className={`rounded-lg p-6 border-2 ${
+                    getTaskStatusColor(task) === 'green' 
+                      ? 'bg-green-50 border-green-200' 
+                      : getTaskStatusColor(task) === 'red'
+                      ? 'bg-red-50 border-red-200'
+                      : getTaskStatusColor(task) === 'yellow'
+                      ? 'bg-yellow-50 border-yellow-200'
+                      : getTaskStatusColor(task) === 'blue'
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-xl font-bold text-gray-900">{task.title}</h4>
+                      <span className={`px-4 py-2 rounded-full text-lg font-bold ${
+                        getTaskStatusColor(task) === 'green' 
+                          ? 'bg-green-500 text-white' 
+                          : getTaskStatusColor(task) === 'red'
+                          ? 'bg-red-500 text-white'
+                          : getTaskStatusColor(task) === 'yellow'
+                          ? 'bg-yellow-500 text-white'
+                          : getTaskStatusColor(task) === 'blue'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-500 text-white'
+                      }`}>
+                        {getTaskStatusText(task) || '⏳ Đang chờ'}
+                      </span>
+                    </div>
+                    
+                    {task.description && (
+                      <p className="text-lg text-gray-700 mb-3">{task.description}</p>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-start">
+                        <MapPin className="w-6 h-6 text-gray-500 mr-3 mt-1" />
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-600 mb-2">Vị trí cần tuần tra:</p>
+                          {task.stops && task.stops.length > 0 ? (
+                            <div className="space-y-2">
+                              {task.stops
+                                .sort((a, b) => a.sequence - b.sequence)
+                                .map((stop, index) => (
+                                  <div key={`${stop.location_id}-${index}`} className="flex items-center">
+                                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm mr-3 ${
+                                      stop.visited ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-600'
+                                    }`}>
+                                      {stop.visited ? '✓' : index + 1}
+                                    </span>
+                                    <div className="flex-1">
+                                      <p className={`text-sm font-medium ${stop.visited ? 'text-green-700' : 'text-gray-900'}`}>
+                                        {stop.location_name}
+                                        {stop.scheduled_time && (
+                                          <span className="ml-2 text-green-600 font-medium">
+                                            ({stop.scheduled_time})
+                                          </span>
+                                        )}
+                                      </p>
+                                      {stop.visited_at && (
+                                        <p className="text-xs text-gray-500">
+                                          ✓ Đã chấm công: {new Date(stop.visited_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh',
+                                            month: '2-digit',
+                                            day: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))
+                              }
+              </div>
+            ) : (
+                            <div>
+                              <p className="text-lg font-semibold text-gray-900">
+                                {getTaskLocationName(task) || 'Chưa xác định'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {task.schedule_week && (
+                        <div className="flex items-center">
+                          <Clock className="w-6 h-6 text-gray-500 mr-3" />
+                          <div>
+                            <p className="text-sm text-gray-600">Thời gian:</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {(() => {
+                                try {
+                                  const schedule = JSON.parse(task.schedule_week);
+                                  const date = schedule.date;
+                                  const startTime = schedule.startTime;
+                                  const endTime = schedule.endTime;
+                                  
+                                  // Format ngày
+                                  const dateObj = new Date(date);
+                                  const formattedDate = dateObj.toLocaleDateString('vi-VN', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  });
+                                  
+                                  return `${formattedDate} | ${startTime} - ${endTime}`;
+                                } catch (e) {
+                                  return task.schedule_week;
+                                }
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {task.due_date && (
+                      <div className="mt-4 flex items-center">
+                        <Calendar className="w-6 h-6 text-gray-500 mr-3" />
+                        <div>
+                          <p className="text-sm text-gray-600">Ngày hạn:</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {new Date(task.due_date).toLocaleDateString('vi-VN')}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="mt-4 flex space-x-2">
+                      {/* Nút Hoàn thành cho Employee (nhiệm vụ của mình) - chỉ khi chưa quá hạn */}
+                      {user?.role === 'employee' && task.assigned_to === user.id && task.status !== 'completed' && getTaskRealTimeStatus(task).status !== 'overdue' && (
+                        <TaskCompleteButton taskId={task.id} onComplete={completeTask} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Admin/Manager view - Table format
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tiêu đề</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mô tả</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giao cho</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày hạn</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thời gian</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vị trí</th>
+                <th className="px-4 py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+                    {tasks.map((task) => (
+                      <tr key={task.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-sm text-gray-900">{String(task.id || '')}</td>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">{String(task.title || '')}</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">{String(task.description || '-')}</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">
+                          {(task as any).assigned_user_name || 
+                           (typeof task.assigned_to === 'object' ? 
+                             (task.assigned_to as any)?.full_name || 'Đã giao' : 
+                             task.assigned_to ? 'Đã giao' : 'Chưa giao'
+                           )}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            getTaskStatusColor(task) === 'green' ? 'bg-green-100 text-green-800' :
+                            getTaskStatusColor(task) === 'red' ? 'bg-red-100 text-red-800' :
+                            getTaskStatusColor(task) === 'blue' ? 'bg-blue-100 text-blue-800' :
+                            getTaskStatusColor(task) === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {getTaskStatusText(task) || 'Chờ xử lý'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {task.due_date ? new Date(task.due_date).toLocaleDateString('vi-VN') : '-'}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {task.schedule_week ? (() => {
+                            try {
+                              const schedule = JSON.parse(task.schedule_week);
+                              const date = schedule.date;
+                              const startTime = schedule.startTime;
+                              const endTime = schedule.endTime;
+                              
+                              // Format ngày
+                              const dateObj = new Date(date);
+                              const formattedDate = dateObj.toLocaleDateString('vi-VN', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                              });
+                              
+                              return `${formattedDate} | ${startTime} - ${endTime}`;
+                            } catch (e) {
+                              return task.schedule_week;
+                            }
+                          })() : '-'}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          {task.stops && task.stops.length > 0 ? (
+                            <div className="space-y-1">
+                              {task.stops
+                                .sort((a, b) => a.sequence - b.sequence)
+                                .map((stop, index) => {
+                                  console.log('Admin view - Stop data:', stop, 'Scheduled time:', stop.scheduled_time);
+                                  return (
+                                  <div key={`${stop.location_id}-${index}`} className="text-sm">
+                                    <span className="font-medium">
+                                      {index + 1}. {stop.location_name}
+                                      </span>
+                                      {stop.scheduled_time && (
+                                      <span className="ml-2 text-green-600 font-medium">
+                                          ({stop.scheduled_time})
+                                        </span>
+                                      )}
+                                  </div>
+                                  );
+                                })
+                              }
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="text-sm">
+                                {(task as any).location_name || 
+                                 (typeof task.location_id === 'object' ? 
+                                   (task.location_id as any)?.name || 'Có vị trí' : 
+                                   String(task.location_id || '-')
+                                 )}
+                              </div>
+                              {/* Hiển thị thời gian giao nhiệm vụ */}
+                              {(task as any).created_at && (
+                                <div className="text-xs text-gray-500 mt-1 pt-1 border-t border-gray-200">
+                                  <span className="font-medium text-green-600">📅 Giao lúc:</span> {new Date((task as any).created_at).toLocaleString('vi-VN', {
+                                    timeZone: 'Asia/Ho_Chi_Minh',
+                                    day: '2-digit',
+                                    month: '2-digit', 
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-sm font-medium">
+                          <div className="flex space-x-2">
+                            {/* Nút Edit chỉ cho Admin/Manager */}
+                            {isManagerOrAdmin && (
+                              <>
+                                <button
+                                  onClick={() => editTask(task)}
+                                  className="text-indigo-600 hover:text-indigo-900"
+                                  title="Sửa nhiệm vụ"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => generateQRForTask(task.id)}
+                                  className="text-green-600 hover:text-green-900"
+                                  title="Tạo QR code cho task"
+                                >
+                                  <QrCode className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                            
+                            {/* Nút Xóa chỉ cho Admin */}
+                            {user?.role === 'admin' && (
+                              <button
+                                onClick={() => deleteTask(task.id)}
+                                className="text-red-600 hover:text-red-900"
+                                title="Xóa nhiệm vụ"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {activeTab === 'qr' && isManagerOrAdmin && (
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 shadow-lg">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold">Danh sách QR Codes</h2>
+                    <button 
+              onClick={() => setShowCreateQRModal(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo QR Code mới</span>
+                    </button>
+                </div>
+          
+          {qrCodes.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Chưa có QR code nào được tạo
+                  </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {qrCodes.map((qrCode) => (
+                <div key={qrCode.id} className="bg-white rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-medium text-gray-900">
+                        {qrCode.content || `QR Code ${qrCode.id}`}
+                      </h3>
+                      {qrCode.location_name && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          📍 {qrCode.location_name}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      qrCode.type === 'static' 
+                        ? 'bg-blue-100 text-blue-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {qrCode.type === 'static' ? 'Tĩnh' : 'Động'}
+                    </span>
+                    </div>
+                    
+                  {/* QR Code Image */}
+                  <div className="flex justify-center mb-3">
+                    <img 
+                      src={getQRCodeUrl(qrCode.id)}
+                      alt={`QR Code ${qrCode.content || qrCode.id}`}
+                      className="w-32 h-32 border border-gray-300 rounded"
+                      crossOrigin="anonymous"
+                      onLoad={() => console.log(`✅ QR Code ${qrCode.id} loaded successfully`)}
+                      onError={(e) => {
+                        console.error(`❌ QR Code ${qrCode.id} failed to load:`, e);
+                        const target = e.currentTarget;
+                        if (target) {
+                          target.style.display = 'none';
+                          const nextSibling = target.nextElementSibling as HTMLElement;
+                          if (nextSibling) {
+                            nextSibling.style.display = 'block';
+                          }
+                        }
+                      }}
+                    />
+                    <div className="w-32 h-32 border border-gray-300 rounded flex items-center justify-center text-gray-500 text-sm" style={{display: 'none'}}>
+                      {qrCode.content || 'QR Code'}
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-gray-500 mb-3 text-center">
+                    Tạo: {new Date(qrCode.created_at).toLocaleString('vi-VN')}
+                  </p>
+                  
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => {
+                        setSelectedQRCode(qrCode);
+                        setShowQRModal(true);
+                      }}
+                      className="flex-1 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center justify-center space-x-1"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>Xem</span>
+                    </button>
+                    <button
+                      onClick={() => downloadQR(qrCode)}
+                      className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                      title="Tải xuống"
+                    >
+                      <Download className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => printQR(qrCode)}
+                      className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+                      title="In"
+                    >
+                      <Printer className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => deleteQRCode(qrCode.id)}
+                      className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                      title="Xóa"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+                        </div>
+                      )}
+                      
+      {/* QR Code Modal */}
+      {showQRModal && selectedQRCode && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Chi tiết QR Code</h3>
+                      <button
+                onClick={() => setShowQRModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+                      </button>
+                    </div>
+            
+            <div className="text-center">
+              <div className="w-80 h-80 bg-white border-4 border-gray-300 rounded-lg flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <img 
+                  src={getQRCodeUrl(selectedQRCode.id)}
+                  alt={`QR Code ${selectedQRCode.qr_content}`}
+                  className="w-72 h-72 object-contain"
+                  onLoad={() => console.log(`✅ QR Modal ${selectedQRCode.id} loaded successfully`)}
+                  onError={(e) => {
+                    console.error(`❌ QR Modal ${selectedQRCode.id} failed to load:`, e);
+                    const target = e.currentTarget;
+                    if (target) {
+                      target.style.display = 'none';
+                      const nextSibling = target.nextElementSibling as HTMLElement;
+                      if (nextSibling) {
+                        nextSibling.style.display = 'flex';
+                      }
+                    }
+                  }}
+                />
+                <div className="text-center" style={{display: 'none'}}>
+                  <QrCode className="w-24 h-24 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">QR Code Preview</p>
+                </div>
+              </div>
+              
+              <div className="text-left space-y-2">
+                <p><strong>Tên:</strong> {selectedQRCode.data || selectedQRCode.qr_content || `QR ${selectedQRCode.id}`}</p>
+                <p><strong>Nội dung:</strong> {selectedQRCode.data || selectedQRCode.qr_content || `QR ${selectedQRCode.id}`}</p>
+                <p><strong>Loại:</strong> {selectedQRCode.type === 'static' ? 'Tĩnh' : 'Động'}</p>
+                <p><strong>Tạo lúc:</strong> {new Date(selectedQRCode.created_at).toLocaleString('vi-VN')}</p>
+              </div>
+              
+              <div className="flex space-x-3 mt-6">
+                            <button
+                  onClick={() => downloadQR(selectedQRCode)}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center space-x-2"
+                            >
+                              <Download className="w-4 h-4" />
+                  <span>Tải xuống</span>
+                            </button>
+                            <button
+                  onClick={() => printQR(selectedQRCode)}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2"
+                            >
+                              <Printer className="w-4 h-4" />
+                  <span>In</span>
+                            </button>
+                          </div>
+              </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create QR Code Modal */}
+      {showCreateQRModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Tạo QR Code mới</h3>
+              <button
+                onClick={() => setShowCreateQRModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+                <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nội dung QR Code *
+                </label>
+                <input
+                  type="text"
+                  value={qrData.data}
+                  onChange={(e) => setQrData({ ...qrData, data: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Nhập nội dung cho QR code"
+                  required
+                />
+                </div>
+                
+                <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Loại QR Code
+                </label>
+                <select
+                  value={qrData.type}
+                  onChange={(e) => setQrData({ ...qrData, type: e.target.value as 'static' | 'dynamic' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="static">Tĩnh (Static)</option>
+                  <option value="dynamic">Động (Dynamic)</option>
+                </select>
+                </div>
+                
+                <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vị trí (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  value={qrData.location_id}
+                  onChange={(e) => setQrData({ ...qrData, location_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Nhập tên vị trí (tùy chọn)"
+                />
+                </div>
+              </div>
+              
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => setShowCreateQRModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={createQRCode}
+                disabled={!qrData.data.trim()}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                Tạo QR Code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TasksPage;

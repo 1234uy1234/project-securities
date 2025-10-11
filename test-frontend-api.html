@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Frontend API</title>
+</head>
+<body>
+    <h1>Test Frontend API</h1>
+    <button onclick="testAPI()">Test API Call</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                // Test với FormData
+                const formData = new FormData();
+                formData.append('qr_data', 'test_frontend');
+                
+                // Tạo một blob ảnh giả
+                const canvas = document.createElement('canvas');
+                canvas.width = 100;
+                canvas.height = 100;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'red';
+                ctx.fillRect(0, 0, 100, 100);
+                
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        formData.append('photo', blob, 'test.jpg');
+                        
+                        // Gửi request
+                        fetch('https://localhost:8000/api/checkin/simple', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJodW5nIiwiZXhwIjoxNzU5MTM5ODQwfQ.8EvdfCt6L1H8CB6ddpyuplQ2xULZDCm-qRhqRBlBRYo'
+                            },
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            result.innerHTML = '✅ Success: ' + JSON.stringify(data, null, 2);
+                        })
+                        .catch(error => {
+                            result.innerHTML = '❌ Error: ' + error.message;
+                        });
+                    }
+                }, 'image/jpeg');
+                
+            } catch (error) {
+                result.innerHTML = '❌ Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
+

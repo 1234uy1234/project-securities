@@ -1,0 +1,7 @@
+{
+  "backup_time": "2025-09-30T14:22:24.525074",
+  "total_qr_codes": 7,
+  "copied_files": 7,
+  "api_base_url": "https://localhost:8000/api",
+  "note": "Backup tự động - có thể restore khi đổi IP"
+}

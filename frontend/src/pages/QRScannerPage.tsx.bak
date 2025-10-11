@@ -1,0 +1,771 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser'
+import Webcam from 'react-webcam'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { api } from '../utils/api'
+import { getCurrentPosition } from '../utils/geo'
+import { enqueueScan, flushQueue, setupOnlineSync } from '../utils/offlineQueue'
+import { useAuthStore } from '../stores/authStore'
+import ScanCamera from '../components/ScanCamera'
+import SimpleMobileCamera from '../components/SimpleMobileCamera'
+
+const QRScannerPage = () => {
+  const navigate = useNavigate()
+  const photoWebcamRef = useRef<Webcam | null>(null)
+  const scannerRef = useRef<any>(null) // Thêm scannerRef
+  const [photoCameraActive, setPhotoCameraActive] = useState(false)
+  const [photoWebcamError, setPhotoWebcamError] = useState<string | null>(null)
+  const [lastResult, setLastResult] = useState<string>('')
+  const [notes, setNotes] = useState('')
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)
+  const [photoFacingMode, setPhotoFacingMode] = useState<'user' | 'environment'>('environment')
+  
+  // Flow steps và status
+  const [currentStep, setCurrentStep] = useState<'scan' | 'photo' | 'submit' | 'success'>('scan')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Thông tin nhiệm vụ từ QR scan
+  const [currentLocation, setCurrentLocation] = useState<any>(null)
+  const [currentTasks, setCurrentTasks] = useState<any[]>([])
+  const [showTaskInfo, setShowTaskInfo] = useState(false)
+  
+  // Lấy ref từ URL params
+  const [searchParams] = useSearchParams()
+  const ref = searchParams.get('ref')
+  
+  // State để lưu QR content đã quét
+  const [scannedQRContent, setScannedQRContent] = useState<string | null>(null)
+  
+  // Location info
+  const [locationInfo, setLocationInfo] = useState<{
+    name: string;
+    address: string;
+    gps: { lat: number; lng: number };
+    scannedAt: string;
+  } | null>(null)
+  
+  // Camera state
+  const [isCameraActive, setIsCameraActive] = useState(false)
+
+  // Khôi phục thông tin từ localStorage khi component mount
+  useEffect(() => {
+    const savedLocation = localStorage.getItem('lastScannedLocation')
+    const savedQR = localStorage.getItem('lastScannedQR')
+    
+    if (savedLocation && savedQR) {
+      try {
+        const locationData = JSON.parse(savedLocation)
+        setLocationInfo(locationData)
+        setScannedQRContent(savedQR)
+        setLastResult(savedQR)
+        console.log('Khôi phục thông tin vị trí từ localStorage:', locationData)
+      } catch (error) {
+        console.error('Lỗi khôi phục thông tin:', error)
+      }
+    }
+  }, [])
+
+  // Bật camera chụp ảnh đơn giản
+  const enablePhotoCamera = async () => {
+    try {
+      console.log('🎥 Enabling Simple Photo Camera...')
+      setPhotoWebcamError(null)
+      
+      // SimpleMobileCamera sẽ tự động dừng tất cả streams
+      setPhotoCameraActive(true)
+      console.log('✅ Simple Photo Camera enabled')
+    } catch (err: any) {
+      console.error('❌ Photo Camera error:', err)
+      setPhotoWebcamError('Lỗi camera: ' + err.message)
+    }
+  }
+  
+  // Chuyển đổi camera trước/sau cho QR Scanner
+  const switchCamera = () => {
+    // This function is for QR scanner camera, not photo camera
+    console.log('🔄 Switching QR Scanner camera')
+  }
+
+  // Tắt camera chụp ảnh đơn giản
+  const disablePhotoCamera = async () => {
+    console.log('⏹️ Disabling Simple Photo Camera...')
+    setPhotoCameraActive(false)
+    setPhotoWebcamError(null)
+    
+    // Đợi một chút để camera dừng hoàn toàn
+    await new Promise(resolve => setTimeout(resolve, 300))
+    
+    console.log('✅ Simple Photo Camera disabled')
+  }
+
+  // Chuyển đổi camera trước/sau cho Photo
+  const switchPhotoCamera = () => {
+    setPhotoFacingMode(prev => prev === 'environment' ? 'user' : 'environment')
+    if (photoCameraActive) {
+      setPhotoCameraActive(false)
+      setTimeout(() => setPhotoCameraActive(true), 100)
+    }
+  }
+
+  // Xử lý lỗi camera Photo
+  const handlePhotoWebcamError = (err: any) => {
+    console.error('Photo Webcam error:', err)
+    let errorMessage = 'Lỗi camera chụp ảnh: '
+    
+    if (err.name === 'NotAllowedError') {
+      errorMessage += 'Quyền truy cập bị từ chối'
+    } else if (err.name === 'NotFoundError') {
+      errorMessage += 'Không tìm thấy camera'
+    } else if (err.name === 'NotReadableError') {
+      errorMessage += 'Camera đang được sử dụng'
+    } else if (err.name === 'NotSupportedError') {
+      errorMessage += 'Thiết bị không hỗ trợ'
+    } else if (err.name === 'OverconstrainedError') {
+      errorMessage += 'Độ phân giải không được hỗ trợ'
+    } else {
+      errorMessage += err.message || 'Lỗi không xác định'
+    }
+    
+    setPhotoWebcamError(errorMessage)
+    setPhotoCameraActive(false)
+  }
+
+  // Xử lý kết quả quét QR từ ScanCamera
+  const handleQRScan = async (result: string) => {
+    console.log('QR Code scanned:', result)
+    
+    try {
+      // Kiểm tra QR code có hợp lệ không
+      const qrResponse = await api.get(`/qr-codes/validate/${encodeURIComponent(result)}`)
+      const qrData = qrResponse.data
+      
+      if (!qrData || !qrData.valid) {
+        toast.error(`❌ QR code không hợp lệ: ${result}`)
+        return
+      }
+      
+      // Kiểm tra xem QR code có đúng chỗ không (nếu có location_id từ URL)
+      const locationId = searchParams.get('location_id')
+      if (locationId && qrData.location_id && qrData.location_id.toString() !== locationId) {
+        toast.error(`❌ QR code không đúng chỗ! QR này thuộc vị trí khác.`)
+        return
+      }
+      
+      setLastResult(result)
+      setScannedQRContent(result)
+      setCurrentStep('photo') // Move to photo step
+      
+      // Hiển thị thông tin vị trí - quét tên gì hiển thị tên đó
+      const locationData = {
+        name: qrData.data || qrData.content || result, // Hiển thị tên thật của QR
+        address: `Đã quét QR: ${qrData.data || qrData.content || result}`,
+        gps: { lat: 0, lng: 0 },
+        scannedAt: new Date().toLocaleString('vi-VN')
+      }
+      setLocationInfo(locationData)
+      
+      // Lưu vào localStorage
+      localStorage.setItem('lastScannedLocation', JSON.stringify(locationData))
+      localStorage.setItem('lastScannedQR', result)
+      
+      // Hiển thị thông báo ngay lập tức
+      toast.success(`✅ Đã quét QR: ${qrData.data || qrData.content || result}`)
+      
+    } catch (error: any) {
+      console.error('Error validating QR code:', error)
+      toast.error(`❌ Lỗi xác thực QR code: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
+  // Xử lý lỗi quét QR
+  const handleQRScanError = (error: string) => {
+    console.error('QR Scan error:', error)
+    setPhotoWebcamError(error)
+  }
+
+  // Chụp ảnh với OptimizedCamera
+  const capturePhoto = () => {
+    console.log('📷 CAPTURE PHOTO: Starting with OptimizedCamera...')
+    
+    // Tạo canvas để capture từ video element
+    const videoElement = document.querySelector('video') as HTMLVideoElement
+    if (!videoElement) {
+      console.error('📷 CAPTURE PHOTO: No video element found')
+      toast.error('Không tìm thấy video element')
+      return
+    }
+    
+    try {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      
+      if (!ctx) {
+        console.error('📷 CAPTURE PHOTO: No canvas context')
+        toast.error('Không thể tạo canvas context')
+        return
+      }
+      
+      // Set canvas size
+      canvas.width = videoElement.videoWidth
+      canvas.height = videoElement.videoHeight
+      
+      // Draw video frame
+      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+      
+      // Add timestamp overlay
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+      ctx.fillRect(10, canvas.height - 40, 200, 30)
+      
+      ctx.fillStyle = 'white'
+      ctx.font = '14px Arial'
+      ctx.fillText(
+        new Date().toLocaleString('vi-VN'),
+        15,
+        canvas.height - 20
+      )
+      
+      const imageSrc = canvas.toDataURL('image/jpeg', 0.9)
+      console.log('📷 CAPTURE PHOTO: Screenshot result:', imageSrc ? 'SUCCESS' : 'FAILED')
+      
+      if (imageSrc) {
+        setCapturedPhoto(imageSrc)
+        console.log('📷 CAPTURE PHOTO: Photo saved, length:', imageSrc.length)
+        toast.success('📷 Đã chụp ảnh thành công!')
+      } else {
+        console.error('📷 CAPTURE PHOTO: Failed to generate image')
+        toast.error('Không thể chụp ảnh')
+      }
+    } catch (error) {
+      console.error('📷 CAPTURE PHOTO: Error:', error)
+      toast.error('Lỗi khi chụp ảnh: ' + (error as Error).message)
+    }
+  }
+
+  // Xóa ảnh đã chụp
+  const clearPhoto = () => {
+    setCapturedPhoto(null)
+  }
+
+  // Gửi dữ liệu check-in - Đơn giản
+  const submitCheckin = async () => {
+    console.log('🚀 SUBMIT CHECKIN: Starting...')
+    console.log('🚀 SUBMIT CHECKIN: scannedQRContent:', scannedQRContent)
+    console.log('🚀 SUBMIT CHECKIN: capturedPhoto:', capturedPhoto ? 'YES' : 'NO')
+    console.log('🚀 SUBMIT CHECKIN: capturedPhoto length:', capturedPhoto ? capturedPhoto.length : 0)
+    
+    if (!scannedQRContent) {
+      toast.error('Vui lòng quét QR code trước!')
+      return
+    }
+
+    // Bắt buộc chụp ảnh trước khi checkin - KHÔNG CHO PHÉP BỎ QUA
+    if (!capturedPhoto || capturedPhoto.trim() === '') {
+      toast.error('📷 PHẢI CHỤP ẢNH trước khi checkin! Không được bỏ qua!')
+      setCurrentStep('photo')
+      // Bắt buộc bật camera
+      if (!photoCameraActive) {
+        await enablePhotoCamera()
+      }
+      return
+    }
+    
+    // Kiểm tra ảnh có hợp lệ không
+    if (!capturedPhoto.startsWith('data:image/')) {
+      toast.error('📷 Ảnh không hợp lệ! Vui lòng chụp lại!')
+      setCapturedPhoto(null)
+      setCurrentStep('photo')
+      return
+    }
+
+    // Debug: Kiểm tra authentication
+    const authStore = useAuthStore.getState()
+    const token = authStore.token || localStorage.getItem('access_token')
+    console.log('🔍 CHECKIN DEBUG:')
+    console.log('- User:', authStore.user)
+    console.log('- Token:', token ? 'Present' : 'Missing')
+    console.log('- IsAuthenticated:', authStore.isAuthenticated)
+    
+    if (!token) {
+      toast.error('❌ Chưa đăng nhập! Vui lòng đăng nhập lại.')
+      navigate('/login')
+      return
+    }
+
+    setIsSubmitting(true)
+    setCurrentStep('submit')
+
+    try {
+      // Gửi dữ liệu đơn giản - chỉ cần QR content
+      const formData = new FormData()
+      
+      // Validation và debug
+      console.log('📤 QR Content:', scannedQRContent)
+      console.log('📤 QR Content type:', typeof scannedQRContent)
+      console.log('📤 Captured Photo:', capturedPhoto ? 'YES' : 'NO')
+      console.log('📤 Photo length:', capturedPhoto ? capturedPhoto.length : 0)
+      
+      // Cho phép QR data rỗng hoặc chỉ có space - SỬA TRIỆT ĐỂ
+      let qrData = ''
+      
+      if (scannedQRContent) {
+        // Kiểm tra các trường hợp đặc biệt
+        if (scannedQRContent === 'None' || scannedQRContent === 'null' || scannedQRContent === 'undefined') {
+          qrData = ''
+        } else {
+          qrData = scannedQRContent.trim()
+        }
+      }
+      
+      formData.append('qr_data', qrData)
+      
+      console.log('📤 Original scannedQRContent:', scannedQRContent)
+      console.log('📤 Final QR Data:', qrData)
+      console.log('📤 QR Data type:', typeof qrData)
+      console.log('📤 QR Data length:', qrData.length)
+      
+      // BẮT BUỘC gửi ảnh - debug chi tiết
+      console.log('📤 Photo validation:')
+      console.log('  - capturedPhoto:', capturedPhoto ? 'EXISTS' : 'NULL')
+      console.log('  - capturedPhoto type:', typeof capturedPhoto)
+      console.log('  - capturedPhoto length:', capturedPhoto ? capturedPhoto.length : 0)
+      console.log('  - starts with data:image/:', capturedPhoto ? capturedPhoto.startsWith('data:image/') : false)
+      
+      if (capturedPhoto && capturedPhoto.startsWith('data:image/')) {
+        try {
+          // Convert base64 to blob
+          console.log('📤 Converting base64 to blob...')
+          const response = await fetch(capturedPhoto)
+          const blob = await response.blob()
+          
+          console.log('📤 Blob created:')
+          console.log('  - blob size:', blob.size, 'bytes')
+          console.log('  - blob type:', blob.type)
+          console.log('  - blob is valid:', blob.size > 0)
+          
+          if (blob.size > 0) {
+            formData.append('photo', blob, 'photo.jpg')
+            console.log('📤 Photo added to FormData')
+          } else {
+            throw new Error('Blob is empty')
+          }
+        } catch (error) {
+          console.log('❌ Error converting photo:', error)
+          toast.error('❌ LỖI CHUYỂN ĐỔI ẢNH! Vui lòng chụp lại!')
+          setCurrentStep('photo')
+          return
+        }
+      } else {
+        console.log('❌ NO PHOTO TO SEND!')
+        console.log('❌ CapturedPhoto value:', capturedPhoto)
+        toast.error('❌ KHÔNG CÓ ẢNH ĐỂ GỬI! Vui lòng chụp lại!')
+        setCurrentStep('photo')
+        return
+      }
+      
+      console.log('📤 Sending checkin request...')
+      console.log('📤 Captured photo:', capturedPhoto ? 'YES' : 'NO')
+      console.log('📤 FormData entries:')
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value)
+      }
+      
+      // Debug: Kiểm tra FormData có photo không
+      const hasPhoto = formData.has('photo')
+      console.log('📤 FormData has photo:', hasPhoto)
+      
+      // Debug: Kiểm tra token
+      const token = localStorage.getItem('token')
+      console.log('📤 Token exists:', !!token)
+      console.log('📤 Token preview:', token ? token.substring(0, 20) + '...' : 'None')
+      
+      if (!hasPhoto) {
+        console.log('❌ FormData không có photo!')
+        toast.error('❌ LỖI: Không có ảnh trong FormData!')
+        setCurrentStep('photo')
+        return
+      }
+      
+      const response = await api.post('/checkin/simple', formData)
+      
+      // Success!
+      setCurrentStep('success')
+      toast.success('🎉 Check-in thành công!')
+      
+      // Refresh data để cập nhật UI
+      try {
+        // Trigger refresh cho các component khác
+        window.dispatchEvent(new CustomEvent('checkin-success', { 
+          detail: { 
+            qrData: qrData,
+            photo: capturedPhoto ? 'YES' : 'NO',
+            timestamp: new Date().toISOString()
+          } 
+        }))
+        
+        // Refresh page data nếu cần
+        if (window.location.pathname.includes('/tasks') || window.location.pathname.includes('/admin')) {
+          window.location.reload()
+        }
+      } catch (refreshError) {
+        console.log('Refresh error (non-critical):', refreshError)
+      }
+      
+      // Reset form after 2 seconds
+      setTimeout(() => {
+        setScannedQRContent(null)
+        setNotes('')
+        setCapturedPhoto(null)
+        setLastResult('')
+        setLocationInfo(null)
+        setCurrentStep('scan')
+        setIsSubmitting(false)
+        localStorage.removeItem('lastScannedLocation')
+        localStorage.removeItem('lastScannedQR')
+      }, 2000)
+      
+    } catch (error: any) {
+      console.error('❌ Checkin error:', error)
+      console.error('❌ Error response:', error.response?.data)
+      console.error('❌ Error status:', error.response?.status)
+      console.error('❌ Error message:', error.message)
+      
+      let errorMessage = 'Có lỗi xảy ra khi chấm công'
+      
+      if (error.response?.status === 422) {
+        errorMessage = `Lỗi 422: ${error.response?.data?.detail || 'Dữ liệu không hợp lệ'}`
+        console.error('❌ 422 Error details:', error.response?.data)
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Lỗi 401: Token hết hạn, vui lòng đăng nhập lại'
+        // Tự động logout và redirect
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+        return
+      } else if (error.response?.status === 400) {
+        errorMessage = `Lỗi 400: ${error.response?.data?.detail || 'Dữ liệu không đúng'}`
+        console.error('❌ 400 Error details:', error.response?.data)
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+        console.error('❌ Other error details:', error.response?.data)
+      }
+      
+      toast.error(`❌ ${errorMessage}`)
+      setCurrentStep('photo') // Go back to photo step
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-gray-800">Quét QR Code</h1>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+            >
+              ← Quay lại
+            </button>
+          </div>
+          
+          {/* Flow Steps Indicator */}
+          <div className="mt-4">
+            <div className="flex items-center justify-center space-x-4">
+              <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                currentStep === 'scan' ? 'bg-blue-100 text-blue-800' : 
+                currentStep === 'photo' || currentStep === 'submit' || currentStep === 'success' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+              }`}>
+                <span className="text-lg">📱</span>
+                <span className="font-medium">1. Quét QR</span>
+                {currentStep === 'scan' && <span className="animate-pulse">⏳</span>}
+                {(currentStep === 'photo' || currentStep === 'submit' || currentStep === 'success') && <span>✅</span>}
+              </div>
+              
+              <div className={`w-8 h-0.5 ${
+                currentStep === 'photo' || currentStep === 'submit' || currentStep === 'success' ? 'bg-green-500' : 'bg-gray-300'
+              }`}></div>
+              
+              <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                currentStep === 'photo' ? 'bg-blue-100 text-blue-800' : 
+                currentStep === 'submit' || currentStep === 'success' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+              }`}>
+                <span className="text-lg">📷</span>
+                <span className="font-medium">2. Chụp ảnh</span>
+                {currentStep === 'photo' && <span className="animate-pulse">⏳</span>}
+                {(currentStep === 'submit' || currentStep === 'success') && <span>✅</span>}
+              </div>
+              
+              <div className={`w-8 h-0.5 ${
+                currentStep === 'submit' || currentStep === 'success' ? 'bg-green-500' : 'bg-gray-300'
+              }`}></div>
+              
+              <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                currentStep === 'submit' ? 'bg-blue-100 text-blue-800' : 
+                currentStep === 'success' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+              }`}>
+                <span className="text-lg">📤</span>
+                <span className="font-medium">3. Gửi báo cáo</span>
+                {currentStep === 'submit' && <span className="animate-pulse">⏳</span>}
+                {currentStep === 'success' && <span>✅</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* QR Scanner - Using ScanCamera */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Camera Quét QR</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsCameraActive(!isCameraActive)}
+                className={`px-4 py-2 rounded-lg font-medium ${
+                  isCameraActive 
+                    ? 'bg-red-500 text-white hover:bg-red-600' 
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                }`}
+              >
+                {isCameraActive ? '⏹️ Tắt Camera' : '📷 Bật Camera'}
+              </button>
+              <button
+                onClick={() => {
+                  setLocationInfo(null)
+                  setScannedQRContent(null)
+                  setLastResult('')
+                  localStorage.removeItem('lastScannedLocation')
+                  localStorage.removeItem('lastScannedQR')
+                }}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                🔄 Quét QR mới
+              </button>
+            </div>
+          </div>
+          
+          <div className="relative h-96">
+            {isCameraActive ? (
+              <ScanCamera
+                onDecode={handleQRScan}
+                onError={handleQRScanError}
+                isActive={true}
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-200 rounded-lg flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">📷</div>
+                  <p className="text-gray-600">Nhấn "Bật Camera" để bắt đầu quét QR</p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Hiển thị vị trí vừa quét ngay dưới camera */}
+          {locationInfo && (
+            <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">✅</span>
+                  <span className="font-medium text-green-800">
+                    Đã quét QR: {locationInfo.name}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setLocationInfo(null)
+                    setScannedQRContent(null)
+                    setLastResult('')
+                    localStorage.removeItem('lastScannedLocation')
+                    localStorage.removeItem('lastScannedQR')
+                  }}
+                  className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="text-sm text-green-600 mt-1">
+                Thời gian: {locationInfo.scannedAt}
+              </div>
+            </div>
+          )}
+        </div>
+
+
+
+        {/* Task Info - Nhiệm vụ liên quan */}
+        {showTaskInfo && currentTasks.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+            <h3 className="text-lg font-semibold mb-2">📋 Nhiệm vụ liên quan:</h3>
+            {currentTasks.map((task, index) => (
+              <div key={index} className="border rounded-lg p-3 mb-2 bg-green-50">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-medium text-green-800">{task.title}</h4>
+                    <p className="text-sm text-gray-600">{task.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Trạng thái: <span className="font-medium">{task.status}</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">
+                      Tuần: {task.schedule_week}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Photo Capture - Chụp ảnh xác nhận */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+          <h2 className="text-lg font-semibold mb-4">📷 Chụp ảnh xác nhận</h2>
+          
+          <div className="flex gap-4">
+            <div className="flex-1">
+              {photoCameraActive ? (
+                <div className="relative">
+                  <SimpleMobileCamera
+                    isActive={photoCameraActive}
+                    onError={(error) => setPhotoWebcamError(error)}
+                    onReady={() => console.log('Photo camera ready')}
+                    className="w-full h-48 rounded-lg"
+                    facingMode={photoFacingMode}
+                  />
+                  
+                  <button
+                    onClick={capturePhoto}
+                    className="absolute bottom-2 right-2 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 z-10"
+                  >
+                    📷
+                  </button>
+                  
+                  <button
+                    onClick={disablePhotoCamera}
+                    className="absolute bottom-2 left-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 z-10"
+                  >
+                    ❌
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full h-48 bg-gray-200 rounded-lg flex flex-col items-center justify-center">
+                  <button
+                    onClick={enablePhotoCamera}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 mb-2"
+                  >
+                    Bật Camera
+                  </button>
+                  {photoWebcamError && (
+                    <div className="text-red-500 text-sm text-center px-2">
+                      {photoWebcamError}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex-1">
+              {capturedPhoto ? (
+                <div className="relative">
+                  <img
+                    src={capturedPhoto}
+                    alt="Captured"
+                    className="w-full h-48 object-cover rounded-lg"
+                  />
+                  <button
+                    onClick={clearPhoto}
+                    className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+                  >
+                    ×
+                  </button>
+                  <div className="absolute bottom-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+                    {new Date().toLocaleString('vi-VN')}
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-500">Chưa có ảnh</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {photoWebcamError && (
+            <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg">
+              {photoWebcamError}
+            </div>
+          )}
+
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={switchPhotoCamera}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              🔄 Chuyển Camera
+            </button>
+            {photoCameraActive && (
+              <button
+                onClick={disablePhotoCamera}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+              >
+                Tắt Camera
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+          <h2 className="text-lg font-semibold mb-2">Ghi chú</h2>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Nhập ghi chú..."
+            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={3}
+          />
+        </div>
+
+        {/* Submit */}
+        {/* Success Indicator */}
+        {currentStep === 'success' && (
+          <div className="bg-green-100 border-2 border-green-500 rounded-lg p-6 mb-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-bold text-green-800 mb-2">Check-in thành công!</h2>
+              <p className="text-green-700">Báo cáo đã được gửi thành công</p>
+              <div className="mt-4">
+                <div className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-lg">
+                  <span className="animate-spin mr-2">⏳</span>
+                  Đang reset form...
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <button
+            onClick={submitCheckin}
+            disabled={isSubmitting || currentStep === 'success'}
+            className={`w-full px-6 py-3 rounded-lg font-medium ${
+              currentStep === 'success' 
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                : isSubmitting 
+                  ? 'bg-blue-500 text-white cursor-not-allowed' 
+                  : 'bg-green-500 text-white hover:bg-green-600'
+            }`}
+          >
+            {currentStep === 'success' ? '✅ Hoàn thành' : 
+             isSubmitting ? '⏳ Đang gửi...' : '📤 Gửi Check-in'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default QRScannerPage

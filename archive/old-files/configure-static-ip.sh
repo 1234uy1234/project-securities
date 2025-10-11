@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Script tự động cấu hình Static IP trên macOS
+if [ $# -ne 3 ]; then
+    echo "Sử dụng: $0 <IP_ADDRESS> <GATEWAY> <SUBNET_MASK>"
+    echo "Ví dụ: $0 localhost localhost 255.255.255.0"
+    exit 1
+fi
+
+STATIC_IP=$1
+GATEWAY=$2
+SUBNET_MASK=$3
+
+echo "🔧 Cấu hình Static IP: $STATIC_IP"
+echo ""
+
+# Tìm interface mạng đang hoạt động
+INTERFACE=$(route -n get default | grep interface | awk '{print $2}')
+echo "📍 Interface: $INTERFACE"
+
+# Tạo file cấu hình mạng
+echo "📝 Tạo file cấu hình mạng..."
+
+# Backup cấu hình cũ
+sudo cp /etc/hostconfig /etc/hostconfig.backup 2>/dev/null || true
+
+# Cấu hình IP tĩnh
+echo "🔧 Cấu hình IP tĩnh..."
+sudo networksetup -setmanual $INTERFACE $STATIC_IP $SUBNET_MASK $GATEWAY
+
+# Cấu hình DNS
+echo "🔧 Cấu hình DNS..."
+sudo networksetup -setdnsservers $INTERFACE 8.8.8.8 8.8.4.4
+
+# Khởi động lại mạng
+echo "🔄 Khởi động lại mạng..."
+sudo networksetup -setnetworkserviceenabled $INTERFACE off
+sleep 2
+sudo networksetup -setnetworkserviceenabled $INTERFACE on
+
+echo "✅ Hoàn thành cấu hình Static IP!"
+echo "📍 IP mới: $STATIC_IP"
+echo "🌐 Gateway: $GATEWAY"
+echo "🔍 Subnet: $SUBNET_MASK"
+echo ""
+echo "⚠️  Lưu ý: Nếu mất kết nối, chạy:"
+echo "   sudo networksetup -setdhcp $INTERFACE"
+echo "   để khôi phục DHCP"

@@ -1,0 +1,9 @@
+
+> manhtoan-patrol-frontend@1.0.0 dev
+> vite --host 0.0.0.0 --port 5173 --https
+
+
+  VITE v4.5.14  ready in 369 ms
+
+  ➜  Local:   https://localhost:5173/
+  ➜  Network: https://10.10.68.38:5173/

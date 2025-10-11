@@ -1,0 +1,9 @@
+INFO:     Started server process [97397]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [97397]
+🔧 CORS Settings: ['https://10.10.68.106', 'https://10.10.68.106', 'https://10.10.68.106:5173', 'https://10.10.68.106:5174', 'https://10.10.68.106:5175', 'https://10.10.68.106:5173', 'https://10.10.68.106:5174', 'https://10.10.68.106:5175', 'https://localhost:5173', 'https://localhost:5174', 'https://localhost:5175', 'https://127.0.0.1:5173', 'https://127.0.0.1:5174', 'https://127.0.0.1:5175']

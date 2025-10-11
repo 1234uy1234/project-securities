@@ -1,0 +1,115 @@
+import axios from 'axios'
+import { useAuthStore } from '../stores/authStore'
+
+export const api = axios.create({
+  baseURL: 'https://10.10.68.106:8000/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    // Lấy token từ store hoặc localStorage
+    const storeToken = useAuthStore.getState().token
+    const localToken = localStorage.getItem('access_token')
+    const token = storeToken || localToken
+    
+    console.log('🌐 API REQUEST:', config.url)
+    console.log('🌐 API TOKEN:', token ? 'Present' : 'Missing')
+    console.log('🌐 API STORE TOKEN:', storeToken ? 'Present' : 'Missing')
+    console.log('🌐 API LOCAL TOKEN:', localToken ? 'Present' : 'Missing')
+    
+    // Don't override Content-Type for FormData (multipart/form-data)
+    if (config.data instanceof FormData) {
+      console.log('🌐 API: FormData detected, removing Content-Type header')
+      delete config.headers['Content-Type']
+    }
+    
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+      console.log('🌐 API: Authorization header added')
+    } else {
+      console.log('🌐 API: No token found for request')
+    }
+    return config
+  },
+  (error) => {
+    console.error('🌐 API REQUEST ERROR:', error)
+    return Promise.reject(error)
+  }
+)
+
+// Response interceptor to handle token refresh
+api.interceptors.response.use(
+  (response) => {
+    console.log('🌐 API RESPONSE:', response.status, response.config.url)
+    return response
+  },
+  async (error) => {
+    console.error('🌐 API RESPONSE ERROR:', error.response?.status, error.config?.url)
+    
+    const originalRequest = error.config
+
+    // Tránh vòng lặp refresh khi lỗi không phải 401 từ backend gốc
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
+      originalRequest._retry = true
+
+      try {
+        // Chỉ refresh nếu có refresh token (đăng nhập bằng password)
+        const refreshToken = localStorage.getItem('refresh_token')
+        if (!refreshToken) {
+          console.log('🌐 API: No refresh token available, logging out')
+          useAuthStore.getState().logout()
+          return Promise.reject(error)
+        }
+        
+        await useAuthStore.getState().refreshToken()
+        const token = useAuthStore.getState().token
+        if (token) {
+          originalRequest.headers.Authorization = `Bearer ${token}`
+          console.log('🌐 API: Token refreshed, retrying request')
+          return api(originalRequest)
+        }
+      } catch (refreshError) {
+        console.error('🌐 API: Token refresh failed, logging out')
+        useAuthStore.getState().logout()
+        return Promise.reject(refreshError)
+      }
+    }
+
+    return Promise.reject(error)
+  }
+)
+
+// Function to ensure token is properly restored on app startup
+export const ensureTokenRestored = () => {
+  try {
+    // Check localStorage first
+    const localToken = localStorage.getItem('access_token')
+    if (localToken) {
+      console.log('🔐 RESTORE: Token found in localStorage, setting in API headers')
+      api.defaults.headers.common['Authorization'] = `Bearer ${localToken}`
+      
+      // Also ensure it's in the store
+      const storeState = useAuthStore.getState()
+      if (!storeState.token) {
+        console.log('🔐 RESTORE: Token not in store, updating store')
+        useAuthStore.setState({ 
+          token: localToken,
+          isAuthenticated: true
+        })
+      }
+    } else {
+      console.log('🔐 RESTORE: No token found in localStorage')
+    }
+  } catch (error) {
+    console.error('🔐 RESTORE: Error restoring token:', error)
+  }
+}
+
+// Call on module load
+ensureTokenRestored()
+
+export default api
