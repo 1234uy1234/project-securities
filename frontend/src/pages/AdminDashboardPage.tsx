@@ -189,40 +189,57 @@ const AdminDashboardPage: React.FC = () => {
   };
 
   const findCheckinRecord = (taskId: number, locationId: number, scheduledTime?: string, taskCreatedAt?: string): CheckinRecord | null => {
-    // LOGIC ĐƠN GIẢN: Tìm checkin record cho task và location, không cần kiểm tra thời gian phức tạp
-    console.log('🔍 Finding checkin record for task:', taskId, 'location:', locationId);
+    // LOGIC MỚI: Tìm checkin record cho task và location, CHỈ LẤY DỮ LIỆU CỦA CÙNG NGÀY VỚI TASK
+    console.log('🔍 ===== FINDING CHECKIN RECORD =====');
+    console.log('🔍 Looking for task:', taskId, 'location:', locationId);
+    console.log('🔍 Total records available:', records.length);
     
-    // Tìm tất cả checkin records cho task và location này
-    const matchingRecords = records.filter(record => 
-      record.task_id === taskId && 
-      record.location_id === locationId &&
-      record.check_in_time // Phải có check_in_time
-    );
+    // Sử dụng ngày của task thay vì ngày hôm nay
+    const taskDate = taskCreatedAt ? new Date(taskCreatedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    console.log('🔍 Task date:', taskDate);
     
-    console.log('📋 Matching records count:', matchingRecords.length);
+    // Tìm tất cả checkin records cho task và location này, CHỈ CỦA CÙNG NGÀY VỚI TASK
+    const matchingRecords = records.filter(record => {
+      if (!record.task_id || !record.location_id || !record.check_in_time) return false;
+      
+      const recordDate = new Date(record.check_in_time).toISOString().split('T')[0];
+      const isSameDate = recordDate === taskDate;
+      const isMatchingTaskLocation = record.task_id === taskId && record.location_id === locationId;
+      
+      console.log(`🔍 Record ${record.id}: task_id=${record.task_id}, location_id=${record.location_id}, date=${recordDate}, isSameDate=${isSameDate}, isMatching=${isMatchingTaskLocation}`);
+      
+      return isMatchingTaskLocation && isSameDate;
+    });
+    
+    console.log('📋 Matching records count (today only):', matchingRecords.length);
     console.log('Available records:', records.map(r => ({
       id: r.id,
       task_id: r.task_id,
       location_id: r.location_id,
       check_in_time: r.check_in_time,
       check_out_time: r.check_out_time,
-      photo_url: r.photo_url
+      photo_url: r.photo_url,
+      date: r.check_in_time ? new Date(r.check_in_time).toISOString().split('T')[0] : 'no-date'
     })));
     
     if (matchingRecords.length > 0) {
-      // Lấy record đầu tiên (hoặc có thể lấy record mới nhất)
-      const found = matchingRecords[0];
-      console.log('✅ Found checkin record:', {
-        task_id: found.task_id,
-        location_id: found.location_id,
-        check_in_time: found.check_in_time,
-        check_out_time: found.check_out_time,
-        photo_url: found.photo_url
-      });
+      // Lấy record mới nhất (theo thời gian check_in_time)
+      const found = matchingRecords.sort((a, b) => 
+        new Date(b.check_in_time || 0).getTime() - new Date(a.check_in_time || 0).getTime()
+      )[0];
+      console.log('✅ ===== FOUND CHECKIN RECORD =====');
+      console.log('✅ Record ID:', found.id);
+      console.log('✅ Task ID:', found.task_id);
+      console.log('✅ Location ID:', found.location_id);
+      console.log('✅ Check-in time:', found.check_in_time);
+      console.log('✅ Photo URL length:', found.photo_url ? found.photo_url.length : 'NO_PHOTO');
+      console.log('✅ ================================');
       return found;
     }
     
-    console.log('❌ No checkin record found');
+    console.log('❌ ===== NO CHECKIN RECORD FOUND =====');
+    console.log('❌ No matching records for task:', taskId, 'location:', locationId, 'taskDate:', taskDate);
+    console.log('❌ ===================================');
     return null;
   };
 
@@ -305,14 +322,34 @@ const AdminDashboardPage: React.FC = () => {
       return { status: 'completed', color: 'green', text: 'Đã chấm công' };
     }
     
-    // Kiểm tra xem có quá hạn không (chỉ áp dụng cho task hôm nay)
-    const isOverdue = isToday && currentTime > scheduledTime + 15; // Quá 15 phút
-    
-    // Nếu quá hạn, báo "Quá hạn" và không thể check-in nữa
-    if (isOverdue) {
-      console.log(`⏰ Location ${stop.location_id} is overdue - more than 15 minutes past scheduled time`);
-      return { status: 'overdue', color: 'red', text: 'Quá hạn' };
+    // KIỂM TRA QUÁ HẠN - SỬA TRỰC TIẾP
+    if (isToday && !hasCheckin) {
+      // Lấy scheduledTime từ stop.scheduled_time
+      const stopScheduledTime = stop.scheduled_time;
+      console.log(`🔍 STOP ${stop.location_id}: scheduled_time=${stopScheduledTime}, type=${typeof stopScheduledTime}`);
+      
+      if (stopScheduledTime && typeof stopScheduledTime === 'string') {
+        const currentTimeInMinutes = currentTime;
+        const scheduledHour = parseInt(stopScheduledTime.split(':')[0]);
+        const scheduledMinute = parseInt(stopScheduledTime.split(':')[1]);
+        const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
+        const isOverdue = currentTimeInMinutes > scheduledTimeInMinutes + 15;
+        
+        console.log(`🕐 OVERDUE CHECK: Stop ${stop.location_id}`, {
+          scheduledTime: stopScheduledTime,
+          currentTimeInMinutes: currentTimeInMinutes,
+          scheduledTimeInMinutes: scheduledTimeInMinutes,
+          timeDiff: currentTimeInMinutes - scheduledTimeInMinutes,
+          isOverdue: isOverdue
+        });
+        
+        if (isOverdue) {
+          console.log(`🚨 STOP ${stop.location_id} IS OVERDUE!`);
+          return { status: 'overdue', color: 'red', text: 'Quá hạn' };
+        }
+      }
     }
+    
     
     // Debug: Time calculations
     
@@ -350,14 +387,8 @@ const AdminDashboardPage: React.FC = () => {
     
     // Xử lý task hôm nay
     if (isToday) {
-      // Nếu chưa chấm công
-      if (isOverdue) {
-        console.log('🔴 OVERDUE: Past deadline');
-        return { status: 'overdue', color: 'red', text: 'Chưa chấm công (quá hạn)' };
-      } else {
-        console.log('🔵 PENDING: Waiting for checkin');
-        return { status: 'pending', color: 'blue', text: 'Chờ chấm công' };
-      }
+      console.log('🔵 PENDING: Waiting for checkin');
+      return { status: 'pending', color: 'blue', text: 'Chờ chấm công' };
     }
     
     // Fallback - không xác định được ngày
@@ -386,10 +417,22 @@ const AdminDashboardPage: React.FC = () => {
           const allRecords = response.data;
           console.log('🔍 ADMIN: All records from API:', allRecords.length);
           
-          // LOGIC THÔNG MINH: Chỉ hiển thị check-in cho mốc thời gian gần nhất
-          const allLocationRecords = allRecords.filter((r: any) => 
-            r.location_id === step.locationId
-          );
+          // LOGIC THÔNG MINH: Chỉ hiển thị check-in cho mốc thời gian gần nhất (COPY TỪ EMPLOYEE)
+          const allLocationRecords = allRecords.filter((r: any) => {
+            if (!r.location_id || !r.check_in_time) return false;
+            
+            // Nếu record có task_id, phải khớp với task hiện tại
+            if (r.task_id && r.task_id !== step.taskId) return false;
+            
+            // Nếu record không có task_id, kiểm tra theo ngày và location
+            if (!r.task_id) {
+              const recordDate = new Date(r.check_in_time).toISOString().split('T')[0];
+              const taskDate = task?.created_at ? new Date(task.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+              return recordDate === taskDate && r.location_id === step.locationId;
+            }
+            
+            return r.location_id === step.locationId;
+          });
           console.log('🔍 ADMIN: Location records found:', allLocationRecords.length);
           console.log('🔍 ADMIN: Location records:', allLocationRecords);
           
@@ -400,6 +443,14 @@ const AdminDashboardPage: React.FC = () => {
               const scheduledHour = parseInt(stopScheduledTime.split(':')[0]);
               const scheduledMinute = parseInt(stopScheduledTime.split(':')[1]);
               const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
+              
+              console.log('🔍 ADMIN: Finding closest record to scheduled time:', scheduledTimeInMinutes);
+              console.log('🔍 ADMIN: Available records:', allLocationRecords.map((r: any) => ({
+                id: r.id,
+                check_in_time: r.check_in_time,
+                time_in_minutes: new Date(r.check_in_time).getHours() * 60 + new Date(r.check_in_time).getMinutes(),
+                diff: Math.abs((new Date(r.check_in_time).getHours() * 60 + new Date(r.check_in_time).getMinutes()) - scheduledTimeInMinutes)
+              })));
               
               record = allLocationRecords.reduce((closest: any, current: any) => {
                 if (!current.check_in_time) return closest;
@@ -413,8 +464,16 @@ const AdminDashboardPage: React.FC = () => {
                   new Date(closest.check_in_time).getMinutes() - scheduledTimeInMinutes
                 ) : Infinity;
                 
+                console.log('🔍 ADMIN: Comparing:', {
+                  current: { id: current.id, time: current.check_in_time, diff: currentDiff },
+                  closest: closest ? { id: closest.id, time: closest.check_in_time, diff: closestDiff } : null,
+                  winner: currentDiff < closestDiff ? 'current' : 'closest'
+                });
+                
                 return currentDiff < closestDiff ? current : closest;
               }, null);
+              
+              console.log('🔍 ADMIN: Selected record:', record ? { id: record.id, time: record.check_in_time } : null);
               
               // Chỉ hiển thị nếu check-in trong vòng 15 phút từ thời gian được giao
               if (record && record.check_in_time) {
@@ -453,6 +512,7 @@ const AdminDashboardPage: React.FC = () => {
         const stop = task?.stops?.find(s => s.location_id === step.locationId);
         
         console.log(`✅ Showing checkin record for Stop ${stop?.sequence} (${stop?.scheduled_time}) - Has checkin record`);
+        console.log(`🔍 STOP DETAILS: location_id=${step.locationId}, scheduled_time=${stop?.scheduled_time}, checkin_time=${record.check_in_time}`);
         
         // Tạo record với thông tin đơn giản
         const enhancedRecord: CheckinRecord = {
@@ -536,6 +596,20 @@ const AdminDashboardPage: React.FC = () => {
             </div>
             <div className="text-right">
               <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => {
+                    console.log('🔄 FORCE REFRESH: Clearing cache and reloading data...');
+                    setRecords([]);
+                    setTasks([]);
+                    setTimeout(() => {
+                      fetchCheckinRecords(true);
+                      fetchTasks();
+                    }, 100);
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                >
+                  🔄 Force Refresh
+                </button>
                 <button
                   onClick={() => {
                     console.log('🔄 Manual refresh triggered');
@@ -658,15 +732,57 @@ const AdminDashboardPage: React.FC = () => {
             
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {tasks.length > 0 ? (
-                tasks.map((task) => (
+                tasks.map((task) => {
+                  // LOGIC MỚI: Kiểm tra trạng thái của TẤT CẢ stops, không chỉ stop đầu tiên
+                  const getOverallTaskStatus = (task: any) => {
+                    console.log(`🔍 TASK ${task.id} (${task.title}): Checking overall status...`);
+                    
+                    if (!task.stops || task.stops.length === 0) {
+                      console.log(`❌ TASK ${task.id}: No stops found`);
+                      return { color: 'gray', text: 'Chưa có stops' };
+                    }
+                    
+                    // Kiểm tra tất cả stops
+                    const allStopsStatus = task.stops.map((stop: any) => {
+                      const status = getLocationStatus(stop, task);
+                      console.log(`🔍 STOP ${stop.location_id} (${stop.scheduled_time}): ${status.status} - ${status.text}`);
+                      return status;
+                    });
+                    
+                    // Nếu TẤT CẢ stops đã hoàn thành
+                    const allCompleted = allStopsStatus.every((status: any) => status.status === 'completed');
+                    if (allCompleted) {
+                      console.log(`✅ TASK ${task.id}: ALL STOPS COMPLETED - showing "Đã chấm công"`);
+                      return { color: 'green', text: 'Đã chấm công' };
+                    }
+                    
+                    // Nếu có stop quá hạn
+                    const hasOverdue = allStopsStatus.some((status: any) => status.status === 'overdue');
+                    if (hasOverdue) {
+                      console.log(`🔴 TASK ${task.id}: HAS OVERDUE STOPS - showing "Quá hạn"`);
+                      return { color: 'red', text: 'Quá hạn (chưa chấm công)' };
+                    }
+                    
+                    // Nếu có ít nhất 1 stop đã hoàn thành
+                    const someCompleted = allStopsStatus.some((status: any) => status.status === 'completed');
+                    if (someCompleted) {
+                      console.log(`🟡 TASK ${task.id}: SOME STOPS COMPLETED - showing "Đang thực hiện"`);
+                      return { color: 'blue', text: 'Đang thực hiện' };
+                    }
+                    
+                    // Mặc định
+                    console.log(`⚪ TASK ${task.id}: DEFAULT - showing "Chờ thực hiện"`);
+                    return { color: 'yellow', text: 'Chờ thực hiện' };
+                  };
+                  
+                  const overallStatus = getOverallTaskStatus(task);
+                  
+                  return (
                   <div key={task.id} className={`border rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow ${
-                    (() => {
-                      const status = getLocationStatus(task.stops?.[0], task);
-                      return status?.color === 'red' ? 'border-red-300 bg-red-50' :
-                             status?.color === 'green' ? 'border-green-300 bg-green-50' :
-                             status?.color === 'blue' ? 'border-blue-300 bg-blue-50' :
-                             'border-gray-200';
-                    })()
+                    overallStatus.color === 'red' ? 'border-red-300 bg-red-50' :
+                    overallStatus.color === 'green' ? 'border-green-300 bg-green-50' :
+                    overallStatus.color === 'blue' ? 'border-blue-300 bg-blue-50' :
+                    'border-gray-200'
                   }`}>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-2 sm:space-y-0">
                       <div className="flex-1 min-w-0">
@@ -693,18 +809,12 @@ const AdminDashboardPage: React.FC = () => {
                           <span className="flex items-center">
                             Trạng thái: 
                             <span className={`ml-1 px-2 py-1 text-xs rounded-full ${
-                              (() => {
-                                const status = getLocationStatus(task.stops?.[0], task);
-                                return status.color === 'red' ? 'bg-red-100 text-red-800' :
-                                       status.color === 'green' ? 'bg-green-100 text-green-800' :
-                                       status.color === 'blue' ? 'bg-blue-100 text-blue-800' :
-                                       'bg-yellow-100 text-yellow-800';
-                              })()
+                              overallStatus.color === 'red' ? 'bg-red-100 text-red-800' :
+                              overallStatus.color === 'green' ? 'bg-green-100 text-green-800' :
+                              overallStatus.color === 'blue' ? 'bg-blue-100 text-blue-800' :
+                              'bg-yellow-100 text-yellow-800'
                             }`}>
-                              {(() => {
-                                const status = getLocationStatus(task.stops?.[0], task);
-                                return status.text;
-                              })()}
+                              {overallStatus.text}
                             </span>
                           </span>
                         </div>
@@ -754,22 +864,30 @@ const AdminDashboardPage: React.FC = () => {
                               }
                             }
 
-                            // LOGIC THÔNG MINH: Chỉ hiển thị check-in cho mốc thời gian gần nhất
+                            // LOGIC THÔNG MINH: Chỉ hiển thị check-in cho mốc thời gian gần nhất (COPY TỪ EMPLOYEE)
+                            const allLocationRecords = records.filter(record => {
+                              if (!record.location_id || !record.check_in_time) return false;
+                              
+                              // Nếu record có task_id, phải khớp với task hiện tại
+                              if (record.task_id && record.task_id !== task.id) return false;
+                              
+                              // Nếu record không có task_id, kiểm tra theo ngày và location
+                              if (!record.task_id) {
+                                const recordDate = new Date(record.check_in_time).toISOString().split('T')[0];
+                                const taskDate = new Date(task.created_at).toISOString().split('T')[0];
+                                return recordDate === taskDate && record.location_id === stop.location_id;
+                              }
+                              
+                              return record.location_id === stop.location_id;
+                            });
+                            
                             let latestCheckin = null;
-                            
-                            // Tìm TẤT CẢ check-in records cho location này
-                            const allLocationRecords = records.filter(record => 
-                              record.location_id === stop.location_id &&
-                              record.check_in_time
-                            );
-                            
                             if (allLocationRecords.length > 0 && stop.scheduled_time && stop.scheduled_time !== 'Chưa xác định') {
                               // Tìm check-in record gần nhất với thời gian được giao
                               const scheduledHour = parseInt(stop.scheduled_time.split(':')[0]);
                               const scheduledMinute = parseInt(stop.scheduled_time.split(':')[1]);
                               const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
                               
-                              // Tìm check-in record có thời gian gần nhất với scheduled_time
                               latestCheckin = allLocationRecords.reduce((closest: any, current) => {
                                 if (!current.check_in_time) return closest;
                                 
@@ -788,7 +906,7 @@ const AdminDashboardPage: React.FC = () => {
                               }, null);
                               
                               // Chỉ hiển thị nếu check-in trong vòng 15 phút từ thời gian được giao
-                              if (latestCheckin) {
+                              if (latestCheckin && latestCheckin.check_in_time) {
                                 const checkinDate = new Date(latestCheckin.check_in_time);
                                 const checkinHour = checkinDate.getHours();
                                 const checkinMinute = checkinDate.getMinutes();
@@ -805,12 +923,23 @@ const AdminDashboardPage: React.FC = () => {
                             }
                             
                             // Debug: Kiểm tra thời gian hiển thị
-                            console.log(`🔍 Stop ${stop.sequence} (${stop.location_id}):`, {
+                            const taskDate = new Date(task.created_at);
+                            const taskDateStr = taskDate.toISOString().split('T')[0];
+                            console.log(`🔍 ADMIN Stop ${stop.sequence} (${stop.location_id}):`, {
+                              task_date: taskDateStr,
                               scheduled_time: stop.scheduled_time,
-                              completed_at: (stop as any).completed_at,
+                              allLocationRecords_count: allLocationRecords.length,
+                              allLocationRecords: allLocationRecords.map(r => ({
+                                id: r.id,
+                                check_in_time: r.check_in_time,
+                                check_in_date: r.check_in_time ? new Date(r.check_in_time).toISOString().split('T')[0] : null,
+                                photo_url: r.photo_url,
+                                same_date: r.check_in_time ? new Date(r.check_in_time).toISOString().split('T')[0] === taskDateStr : false
+                              })),
                               latestCheckin_time: latestCheckin?.check_in_time,
                               latestCheckin_photo: latestCheckin?.photo_url,
-                              final_completedAt: latestCheckin?.check_in_time || (stop as any).completed_at
+                              final_completedAt: latestCheckin?.check_in_time || (stop as any).completed_at,
+                              final_photoUrl: latestCheckin?.photo_url || null
                             });
                             
                             return {
@@ -826,7 +955,7 @@ const AdminDashboardPage: React.FC = () => {
                               scheduledTime: scheduledTime,
                               statusText: status.text,
                               statusColor: status.color,
-                              photoUrl: latestCheckin?.photo_url || null, // Chỉ hiển thị ảnh khi có checkin hợp lệ
+                              photoUrl: latestCheckin?.photo_url || undefined, // Chỉ hiển thị ảnh khi có checkin hợp lệ
                               taskCreatedAt: task.created_at, // Thêm thời gian tạo nhiệm vụ
                               onStepClick: canClick ? handleStepClick : undefined
                             };
@@ -840,8 +969,9 @@ const AdminDashboardPage: React.FC = () => {
                       </div>
                     )}
                   </div>
-                ))
-              ) : (
+                );
+              })
+            ) : (
                 <div className="text-center text-gray-500 py-8">
                   <div className="text-lg">Chưa có nhiệm vụ nào</div>
                   <div className="text-sm mt-1">Tạo nhiệm vụ mới để bắt đầu theo dõi tiến trình</div>

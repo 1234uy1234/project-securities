@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 // SIMPLE NGROK - Gọi trực tiếp ngrok backend với /api prefix
-const NUCLEAR_HTTPS_URL = 'https://biuniquely-wreckful-blake.ngrok-free.dev/api'
+const NUCLEAR_HTTPS_URL = 'https://rolanda-skinless-sue.ngrok-free.dev/api'
 
 export const api = axios.create({
   baseURL: NUCLEAR_HTTPS_URL,

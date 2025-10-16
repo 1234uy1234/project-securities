@@ -1,26 +1,19 @@
 #!/bin/bash
 
-# 🛑 STOP - Dừng toàn bộ dự án
-echo "🛑 DỪNG TOÀN BỘ DỰ ÁN"
-echo "======================"
+echo "🛑 DỪNG TOÀN BỘ HỆ THỐNG"
+echo "========================"
 
-# Dừng tất cả processes
-echo "🛑 Dừng backend..."
-pkill -f "python.*app.py" 2>/dev/null || true
+echo "🛑 Đang dừng tất cả services..."
 pkill -f "uvicorn" 2>/dev/null || true
-
-echo "🛑 Dừng frontend..."
 pkill -f "npm.*dev" 2>/dev/null || true
-
-echo "🛑 Dừng ngrok..."
 pkill -f "ngrok" 2>/dev/null || true
+lsof -ti:5173,5174,8000 | xargs kill -9 2>/dev/null || true
+sleep 3
 
-sleep 2
-
-echo "✅ ĐÃ DỪNG TẤT CẢ PROCESSES!"
-echo "============================="
-echo "🔧 Backend: Đã dừng"
-echo "🎨 Frontend: Đã dừng"
-echo "🌍 Ngrok: Đã dừng"
+echo "✅ TẤT CẢ SERVICES ĐÃ ĐƯỢC DỪNG!"
+echo "==============================="
+echo "🔧 Backend đã dừng"
+echo "🎨 Frontend đã dừng"
+echo "🌐 Ngrok tunnel đã tắt"
 echo ""
-echo "Khởi động lại: ./start.sh"
+echo "💡 Để khởi động lại, chạy: ./start.sh"

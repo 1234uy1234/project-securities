@@ -36,6 +36,35 @@ const EmployeeDashboardPage: React.FC = () => {
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(new Date()); // Thêm state để force re-render
 
+  // Global error handler để bỏ qua lỗi từ browser extension
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error('Global error caught:', event.error);
+      if (event.error && event.error.message && event.error.message.includes('onboarding')) {
+        console.log('Ignoring onboarding.js error from browser extension');
+        event.preventDefault();
+        return false;
+      }
+    };
+    
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      if (event.reason && event.reason.message && event.reason.message.includes('onboarding')) {
+        console.log('Ignoring onboarding.js promise rejection from browser extension');
+        event.preventDefault();
+        return false;
+      }
+    };
+    
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   useEffect(() => {
     if (user?.role === 'employee') {
       fetchCheckinRecords();
@@ -288,23 +317,35 @@ const EmployeeDashboardPage: React.FC = () => {
     }
   };
 
-  const findCheckinRecord = (taskId: number, locationId: number, scheduledTime?: string): CheckinRecord | null => {
-    // LOGIC ĐƠN GIẢN: Tìm checkin record cho task và location, không cần kiểm tra thời gian phức tạp
+  const findCheckinRecord = (taskId: number, locationId: number, scheduledTime?: string, taskCreatedAt?: string): CheckinRecord | null => {
+    // LOGIC MỚI: Tìm checkin record cho task và location, CHỈ LẤY DỮ LIỆU CỦA CÙNG NGÀY VỚI TASK
     console.log('🔍 EMPLOYEE: Finding checkin record for task:', taskId, 'location:', locationId);
     
-    // Tìm tất cả checkin records cho task và location này
-    const matchingRecords = records.filter(record => 
-      record.task_id === taskId && 
-      record.location_id === locationId &&
-      record.check_in_time // Phải có check_in_time
-    );
+    // Sử dụng ngày của task thay vì ngày hôm nay
+    const taskDate = taskCreatedAt ? new Date(taskCreatedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    console.log('🔍 EMPLOYEE: Task date:', taskDate);
     
-    console.log('📋 EMPLOYEE: Matching records count:', matchingRecords.length);
+    // Tìm tất cả checkin records cho task và location này, CHỈ CỦA CÙNG NGÀY VỚI TASK
+    const matchingRecords = records.filter(record => {
+      if (!record.task_id || !record.location_id || !record.check_in_time) return false;
+      
+      const recordDate = new Date(record.check_in_time).toISOString().split('T')[0];
+      const isSameDate = recordDate === taskDate;
+      const isMatchingTaskLocation = record.task_id === taskId && record.location_id === locationId;
+      
+      console.log(`🔍 EMPLOYEE Record ${record.id}: task_id=${record.task_id}, location_id=${record.location_id}, date=${recordDate}, isSameDate=${isSameDate}, isMatching=${isMatchingTaskLocation}`);
+      
+      return isMatchingTaskLocation && isSameDate;
+    });
+    
+    console.log('📋 EMPLOYEE: Matching records count (today only):', matchingRecords.length);
     
     if (matchingRecords.length > 0) {
-      // Lấy record đầu tiên (hoặc có thể lấy record mới nhất)
-      const found = matchingRecords[0];
-      console.log('✅ EMPLOYEE: Found checkin record:', {
+      // Lấy record mới nhất (theo thời gian check_in_time)
+      const found = matchingRecords.sort((a, b) => 
+        new Date(b.check_in_time || 0).getTime() - new Date(a.check_in_time || 0).getTime()
+      )[0];
+      console.log('✅ EMPLOYEE: Found checkin record (today only):', {
         task_id: found.task_id,
         location_id: found.location_id,
         check_in_time: found.check_in_time,
@@ -314,7 +355,7 @@ const EmployeeDashboardPage: React.FC = () => {
       return found;
     }
     
-    console.log('❌ EMPLOYEE: No checkin record found');
+    console.log('❌ EMPLOYEE: No checkin record found for today');
     return null;
   };
 
@@ -338,7 +379,7 @@ const EmployeeDashboardPage: React.FC = () => {
   }
   
   // SỬ DỤNG HÀM findCheckinRecord ĐÃ ĐƯỢC SỬA
-  const hasCheckin = findCheckinRecord(task.id, stop.location_id, stop.scheduled_time);
+  const hasCheckin = findCheckinRecord(task.id, stop.location_id, stop.scheduled_time, task.created_at);
     
     // Sử dụng múi giờ Việt Nam (UTC+7) - sử dụng currentTime state để force re-render
     const nowTime = currentTime; // Sử dụng state thay vì new Date()
@@ -416,20 +457,31 @@ const EmployeeDashboardPage: React.FC = () => {
       return { status: 'completed', color: 'green', text: 'Đã chấm công' };
     }
     
-    // Kiểm tra xem có quá hạn không (chỉ áp dụng cho task hôm nay)
-    const isOverdue = isToday && currentTimeInMinutes > scheduledTimeInMinutes + 15; // Quá 15 phút
-    
-    console.log(`🕐 EMPLOYEE: Time comparison:`, {
-      currentTimeInMinutes: currentTimeInMinutes,
-      scheduledTimeInMinutes: scheduledTimeInMinutes,
-      timeDiff: currentTimeInMinutes - scheduledTimeInMinutes,
-      isOverdue: isOverdue
-    });
-    
-    // Nếu quá hạn, báo "Quá hạn" và không thể check-in nữa
-    if (isOverdue) {
-      console.log(`⏰ EMPLOYEE: Location ${stop.location_id} is overdue - more than 15 minutes past scheduled time`);
-      return { status: 'overdue', color: 'red', text: 'Quá hạn' };
+    // KIỂM TRA QUÁ HẠN - SỬA TRỰC TIẾP
+    if (isToday && !hasCheckin) {
+      // Lấy scheduledTime từ stop.scheduled_time
+      const stopScheduledTime = stop.scheduled_time;
+      console.log(`🔍 EMPLOYEE STOP ${stop.location_id}: scheduled_time=${stopScheduledTime}, type=${typeof stopScheduledTime}`);
+      
+      if (stopScheduledTime && stopScheduledTime !== 'Chưa xác định' && typeof stopScheduledTime === 'string') {
+        const scheduledHour = parseInt(stopScheduledTime.split(':')[0]);
+        const scheduledMinute = parseInt(stopScheduledTime.split(':')[1]);
+        const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
+        const isOverdue = currentTimeInMinutes > scheduledTimeInMinutes + 15;
+        
+        console.log(`🕐 EMPLOYEE OVERDUE CHECK: Stop ${stop.location_id}`, {
+          scheduledTime: stopScheduledTime,
+          currentTimeInMinutes: currentTimeInMinutes,
+          scheduledTimeInMinutes: scheduledTimeInMinutes,
+          timeDiff: currentTimeInMinutes - scheduledTimeInMinutes,
+          isOverdue: isOverdue
+        });
+        
+        if (isOverdue) {
+          console.log(`🚨 EMPLOYEE STOP ${stop.location_id} IS OVERDUE!`);
+          return { status: 'overdue', color: 'red', text: 'Quá hạn' };
+        }
+      }
     }
     
     // Xử lý task quá khứ (hôm qua hoặc trước đó) - CHỈ nếu chưa chấm công
@@ -452,14 +504,22 @@ const EmployeeDashboardPage: React.FC = () => {
     
     // Xử lý task hôm nay
     if (isToday) {
-      // Nếu chưa chấm công
-      if (isOverdue) {
-        console.log('🔴 EMPLOYEE: OVERDUE: Past deadline');
-        return { status: 'overdue', color: 'red', text: 'Chưa chấm công (quá hạn)' };
-      } else {
-        console.log('🔵 EMPLOYEE: PENDING: Waiting for checkin');
-        return { status: 'pending', color: 'blue', text: 'Chờ chấm công' };
+      // Kiểm tra quá hạn giống như Admin Dashboard
+      if (stop.scheduled_time && stop.scheduled_time !== 'Chưa xác định' && typeof stop.scheduled_time === 'string') {
+        const currentTimeInMinutesNow = currentTimeInMinutes;
+        const scheduledHour = parseInt(stop.scheduled_time.split(':')[0]);
+        const scheduledMinute = parseInt(stop.scheduled_time.split(':')[1]);
+        const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
+        const isOverdue = currentTimeInMinutesNow > scheduledTimeInMinutes + 15;
+        
+        if (isOverdue) {
+          console.log('🔴 EMPLOYEE: OVERDUE: Past deadline');
+          return { status: 'overdue', color: 'red', text: 'Chưa chấm công (quá hạn)' };
+        }
       }
+      
+      console.log('🔵 EMPLOYEE: PENDING: Waiting for checkin');
+      return { status: 'pending', color: 'blue', text: 'Chờ chấm công' };
     }
     
     // Fallback - không xác định được ngày
@@ -472,13 +532,24 @@ const EmployeeDashboardPage: React.FC = () => {
     
     if (step.taskId && step.locationId) {
       // LOGIC THÔNG MINH: Chỉ hiển thị check-in cho mốc thời gian gần nhất (COPY TỪ ADMIN)
-      const allLocationRecords = records.filter(r => 
-        r.location_id === step.locationId &&
-        r.check_in_time
-      );
+      const allLocationRecords = records.filter(r => {
+        if (!r.location_id || !r.check_in_time) return false;
+        
+        // Nếu record có task_id, phải khớp với task hiện tại
+        if (r.task_id && r.task_id !== step.taskId) return false;
+        
+        // Nếu record không có task_id, kiểm tra theo ngày và location
+        if (!r.task_id) {
+          const recordDate = new Date(r.check_in_time).toISOString().split('T')[0];
+          const today = new Date().toISOString().split('T')[0];
+          return recordDate === today && r.location_id === step.locationId;
+        }
+        
+        return r.location_id === step.locationId;
+      });
       
       let record = null;
-      if (allLocationRecords.length > 0 && step.scheduledTime && step.scheduledTime !== 'Chưa xác định') {
+      if (allLocationRecords.length > 0 && step.scheduledTime && step.scheduledTime !== 'Chưa xác định' && typeof step.scheduledTime === 'string') {
         // Tìm check-in record gần nhất với thời gian được giao
         const scheduledHour = parseInt(step.scheduledTime.split(':')[0]);
         const scheduledMinute = parseInt(step.scheduledTime.split(':')[1]);
@@ -587,8 +658,9 @@ const EmployeeDashboardPage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+  try {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header với thông tin real-time */}
         <div className="mb-8">
@@ -662,14 +734,56 @@ const EmployeeDashboardPage: React.FC = () => {
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {tasks.length > 0 ? (
             tasks.map((task) => {
-              const status = getLocationStatus(task.stops?.[0] || {}, task);
+              // LOGIC MỚI: Kiểm tra trạng thái của TẤT CẢ stops, không chỉ stop đầu tiên
+              const getOverallTaskStatus = (task: any) => {
+                console.log(`🔍 EMPLOYEE TASK ${task.id} (${task.title}): Checking overall status...`);
+                
+                if (!task.stops || task.stops.length === 0) {
+                  console.log(`❌ EMPLOYEE TASK ${task.id}: No stops found`);
+                  return { color: 'gray', text: 'Chưa có stops' };
+                }
+                
+                // Kiểm tra tất cả stops
+                const allStopsStatus = task.stops.map((stop: any) => {
+                  const status = getLocationStatus(stop, task);
+                  console.log(`🔍 EMPLOYEE STOP ${stop.location_id} (${stop.scheduled_time}): ${status.status} - ${status.text}`);
+                  return status;
+                });
+                
+                // Nếu TẤT CẢ stops đã hoàn thành
+                const allCompleted = allStopsStatus.every((status: any) => status.status === 'completed');
+                if (allCompleted) {
+                  console.log(`✅ EMPLOYEE TASK ${task.id}: ALL STOPS COMPLETED - showing "Đã chấm công"`);
+                  return { color: 'green', text: 'Đã chấm công' };
+                }
+                
+                // Nếu có stop quá hạn
+                const hasOverdue = allStopsStatus.some((status: any) => status.status === 'overdue');
+                if (hasOverdue) {
+                  console.log(`🔴 EMPLOYEE TASK ${task.id}: HAS OVERDUE STOPS - showing "Quá hạn"`);
+                  return { color: 'red', text: 'Quá hạn (chưa chấm công)' };
+                }
+                
+                // Nếu có ít nhất 1 stop đã hoàn thành
+                const someCompleted = allStopsStatus.some((status: any) => status.status === 'completed');
+                if (someCompleted) {
+                  console.log(`🟡 EMPLOYEE TASK ${task.id}: SOME STOPS COMPLETED - showing "Đang thực hiện"`);
+                  return { color: 'blue', text: 'Đang thực hiện' };
+                }
+                
+                // Mặc định
+                console.log(`⚪ EMPLOYEE TASK ${task.id}: DEFAULT - showing "Chờ thực hiện"`);
+                return { color: 'yellow', text: 'Chờ thực hiện' };
+              };
+              
+              const overallStatus = getOverallTaskStatus(task);
               
               return (
                     <div key={task.id} className={`border rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow ${
-                      status?.color === 'red' ? 'border-red-300 bg-red-50' :
-                      status?.color === 'green' ? 'border-green-300 bg-green-50' :
-                      status?.color === 'blue' ? 'border-blue-300 bg-blue-50' :
-                      status?.color === 'yellow' ? 'border-yellow-300 bg-yellow-50' :
+                      overallStatus.color === 'red' ? 'border-red-300 bg-red-50' :
+                      overallStatus.color === 'green' ? 'border-green-300 bg-green-50' :
+                      overallStatus.color === 'blue' ? 'border-blue-300 bg-blue-50' :
+                      overallStatus.color === 'yellow' ? 'border-yellow-300 bg-yellow-50' :
                       'border-gray-200 bg-white'
                     }`}>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 space-y-2 sm:space-y-0">
@@ -697,13 +811,13 @@ const EmployeeDashboardPage: React.FC = () => {
                         <span className="flex items-center">
                           Trạng thái: 
                           <span className={`ml-1 px-2 py-1 text-xs rounded-full ${
-                            status.color === 'red' ? 'bg-red-100 text-red-800' :
-                            status.color === 'green' ? 'bg-green-100 text-green-800' :
-                            status.color === 'blue' ? 'bg-blue-100 text-blue-800' :
-                            status.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                            overallStatus.color === 'red' ? 'bg-red-100 text-red-800' :
+                            overallStatus.color === 'green' ? 'bg-green-100 text-green-800' :
+                            overallStatus.color === 'blue' ? 'bg-blue-100 text-blue-800' :
+                            overallStatus.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
-                            {status.text}
+                            {overallStatus.text}
                           </span>
                         </span>
                       </div>
@@ -744,10 +858,21 @@ const EmployeeDashboardPage: React.FC = () => {
                           }
 
                           // LOGIC THÔNG MINH: Chỉ hiển thị check-in cho mốc thời gian gần nhất (COPY TỪ ADMIN)
-                          const allLocationRecords = records.filter(record => 
-                            record.location_id === stop.location_id &&
-                            record.check_in_time
-                          );
+                          const allLocationRecords = records.filter(record => {
+                            if (!record.location_id || !record.check_in_time) return false;
+                            
+                            // Nếu record có task_id, phải khớp với task hiện tại
+                            if (record.task_id && record.task_id !== task.id) return false;
+                            
+                            // Nếu record không có task_id, kiểm tra theo ngày và location
+                            if (!record.task_id) {
+                              const recordDate = new Date(record.check_in_time).toISOString().split('T')[0];
+                              const taskDate = new Date(task.created_at).toISOString().split('T')[0];
+                              return recordDate === taskDate && record.location_id === stop.location_id;
+                            }
+                            
+                            return record.location_id === stop.location_id;
+                          });
                           
                           let latestCheckin = null;
                           if (allLocationRecords.length > 0 && stop.scheduled_time && stop.scheduled_time !== 'Chưa xác định') {
@@ -789,6 +914,21 @@ const EmployeeDashboardPage: React.FC = () => {
                               }
                             }
                           }
+                          
+                          // Debug: Kiểm tra thời gian hiển thị
+                          console.log(`🔍 EMPLOYEE Stop ${stop.sequence} (${stop.location_id}):`, {
+                            scheduled_time: stop.scheduled_time,
+                            completed_at: (stop as any).completed_at,
+                            allLocationRecords: allLocationRecords.map(r => ({
+                              id: r.id,
+                              check_in_time: r.check_in_time,
+                              photo_url: r.photo_url,
+                              location_id: r.location_id
+                            })),
+                            latestCheckin_time: latestCheckin?.check_in_time,
+                            latestCheckin_photo: latestCheckin?.photo_url,
+                            final_completedAt: latestCheckin?.check_in_time || (stop as any).completed_at
+                          });
                           
                           return {
                             id: `stop-${task.id}-${stop.location_id}-${stop.sequence}`,
@@ -842,6 +982,22 @@ const EmployeeDashboardPage: React.FC = () => {
       )}
     </div>
   );
+  } catch (error) {
+    console.error('Employee Dashboard render error:', error);
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-xl mb-4">Lỗi hiển thị trang</div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Tải lại trang
+          </button>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default EmployeeDashboardPage;

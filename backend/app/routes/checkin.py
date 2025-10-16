@@ -255,21 +255,52 @@ async def checkin_simple(
                     try:
                         # Parse scheduled_time (format: "HH:MM")
                         scheduled_hour, scheduled_minute = map(int, scheduled_time_str.split(':'))
-                        scheduled_minutes = scheduled_hour * 60 + scheduled_minute
                         
-                        # Parse checkin_time
-                        checkin_hour = checkin_time.hour
-                        checkin_minute = checkin_time.minute
-                        checkin_minutes = checkin_hour * 60 + checkin_minute
+                        # Tạo scheduled datetime cho ngày hôm nay
+                        today = checkin_time.date()
+                        scheduled_datetime = datetime.combine(today, datetime.min.time().replace(hour=scheduled_hour, minute=scheduled_minute))
+                        scheduled_datetime = scheduled_datetime.replace(tzinfo=timezone(timedelta(hours=7)))
                         
-                        # Tính khoảng cách thời gian (phút)
-                        time_diff = abs(checkin_minutes - scheduled_minutes)
+                        # Tính khoảng cách thời gian (phút) - bao gồm cả ngày
+                        time_diff_minutes = abs((checkin_time - scheduled_datetime).total_seconds() / 60)
                         
-                        print(f"🔍 TIME CHECK: Scheduled {scheduled_time_str} ({scheduled_minutes} min), Checkin {checkin_time.strftime('%H:%M')} ({checkin_minutes} min), Diff: {time_diff} min")
+                        print(f"🔍 TIME CHECK: Scheduled {scheduled_time_str} today ({scheduled_datetime.strftime('%Y-%m-%d %H:%M')}), Checkin {checkin_time.strftime('%Y-%m-%d %H:%M')}, Diff: {time_diff_minutes:.1f} min")
                         
-                        # Chỉ cho phép checkin trong khoảng ±15 phút
-                        if time_diff <= 15:
-                            # Cập nhật stop là đã hoàn thành
+                        # Chỉ cho phép checkin trong khoảng ±15 phút VÀ cùng ngày
+                        if time_diff_minutes <= 15:
+                            # 1. TẠO PATROL_RECORD MỚI cho điểm stop này
+                            from ..models import PatrolRecord
+                            
+                            # Lấy thông tin task và location
+                            task_result = db.execute(text("""
+                                SELECT pts.task_id, pts.location_id, l.name as location_name, pt.title as task_title
+                                FROM patrol_task_stops pts
+                                JOIN locations l ON pts.location_id = l.id
+                                JOIN patrol_tasks pt ON pts.task_id = pt.id
+                                WHERE pts.id = :stop_id
+                            """), {"stop_id": stop_id})
+                            
+                            task_info = task_result.fetchone()
+                            if task_info:
+                                task_id, location_id, location_name, task_title = task_info
+                                
+                                # Tạo patrol_record mới với ảnh và thời gian hiện tại
+                                new_record = PatrolRecord(
+                                    user_id=current_user.id,
+                                    task_id=task_id,
+                                    location_id=location_id,
+                                    check_in_time=checkin_time,
+                                    notes=f"Checkin tại {location_name} lúc {checkin_time.strftime('%H:%M')}",
+                                    photo_base64=photo_base64 if photo_base64 else None
+                                )
+                                
+                                db.add(new_record)
+                                db.commit()
+                                db.refresh(new_record)
+                                
+                                print(f"✅ SIMPLE CHECKIN: Created new patrol_record {new_record.id} for stop {stop_id}")
+                            
+                            # 2. Cập nhật stop là đã hoàn thành
                             db.execute(text("""
                                 UPDATE patrol_task_stops 
                                 SET completed = 1, completed_at = :completed_at 
@@ -277,9 +308,9 @@ async def checkin_simple(
                             """), {"stop_id": stop_id, "completed_at": checkin_time})
                             db.commit()
                             
-                            print(f"✅ SIMPLE CHECKIN: Updated stop {stop_id} as completed (within time window)")
+                            print(f"✅ SIMPLE CHECKIN: Updated stop {stop_id} as completed (within time window ±15 min)")
                         else:
-                            print(f"⚠️ SIMPLE CHECKIN: Checkin time {checkin_time.strftime('%H:%M')} is outside allowed window (±15 min from {scheduled_time_str})")
+                            print(f"⚠️ SIMPLE CHECKIN: Checkin time {checkin_time.strftime('%Y-%m-%d %H:%M')} is outside allowed window (±15 min from {scheduled_time_str} today)")
                             print(f"⚠️ SIMPLE CHECKIN: Stop {stop_id} NOT marked as completed")
                     except Exception as e:
                         print(f"❌ SIMPLE CHECKIN: Error parsing scheduled_time '{scheduled_time_str}': {e}")

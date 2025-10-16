@@ -45,3 +45,11 @@ cloudflared tunnel --url https://10.10.68.200:5173 2>&1 | while IFS= read -r lin
     fi
 done
 
+
+
+
+
+
+
+
+

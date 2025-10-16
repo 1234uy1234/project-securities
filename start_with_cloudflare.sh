@@ -85,3 +85,11 @@ echo ""
 echo "🔧 PIDs: Backend=$BACKEND_PID, Frontend=$FRONTEND_PID, Cloudflare=$CLOUDFLARE_PID"
 echo "Dừng: kill $BACKEND_PID $FRONTEND_PID $CLOUDFLARE_PID"
 
+
+
+
+
+
+
+
+

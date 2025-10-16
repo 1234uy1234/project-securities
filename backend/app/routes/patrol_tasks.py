@@ -199,24 +199,34 @@ async def get_patrol_tasks(
             for stop_row in stops_result.fetchall():
                 stop_id, location_id, sequence, scheduled_time, display_name, completed, completed_at = stop_row
                 
-                # Kiểm tra xem có check-in thực tế trong ngày hôm nay không
+                # Kiểm tra xem có check-in thực tế cho task và location này không
+                # LẤY TẤT CẢ CHECK-IN RECORDS CHO LOCATION NÀY
                 checkin_result = db.execute(text("""
-                    SELECT pr.check_in_time, pr.photo_base64
+                    SELECT pr.check_in_time, pr.photo_base64, pr.photo_path, pr.id
                     FROM patrol_records pr
                     WHERE pr.task_id = :task_id 
                     AND pr.location_id = :location_id
-                    AND DATE(pr.check_in_time) = :today
-                    ORDER BY pr.check_in_time DESC
-                    LIMIT 1
+                    AND DATE(pr.check_in_time) = DATE(:task_created_at)
+                    ORDER BY pr.check_in_time ASC
                 """), {
                     "task_id": task.id,
                     "location_id": location_id,
-                    "today": today
+                    "task_created_at": task.created_at
                 })
                 
-                checkin_row = checkin_result.fetchone()
+                # Lấy check-in record đầu tiên cho location này (không phải mới nhất)
+                checkin_rows = checkin_result.fetchall()
+                checkin_row = checkin_rows[0] if checkin_rows else None
+                
                 is_completed_today = checkin_row is not None
                 actual_completed_at = checkin_row[0] if checkin_row else None
+                photo_base64 = checkin_row[1] if checkin_row else None
+                photo_path = checkin_row[2] if checkin_row else None
+                
+                print(f"🔍 STOP {stop_id} (location {location_id}): scheduled_time={scheduled_time}, is_completed_today={is_completed_today}, actual_completed_at={actual_completed_at}, record_id={checkin_row[3] if checkin_row else None}")
+                if checkin_row:
+                    print(f"📸 STOP {stop_id} PHOTO: {photo_base64[:50] if photo_base64 else 'NO_PHOTO'}...")
+                    print(f"📸 STOP {stop_id} PHOTO_PATH: {photo_path}")
                 
                 # Xử lý completed_at - có thể là string hoặc datetime
                 completed_at_str = None
@@ -233,7 +243,9 @@ async def get_patrol_tasks(
                     "scheduled_time": scheduled_time,
                     "location_name": display_name,
                     "completed": is_completed_today,  # Chỉ true nếu có check-in hôm nay
-                    "completed_at": completed_at_str
+                    "completed_at": completed_at_str,  # Thời gian từ patrol_records, không phải patrol_task_stops
+                    "photo_url": photo_base64,  # Trả về photo_base64 để frontend hiển thị
+                    "photo_path": photo_path  # Trả về photo_path
                 })
             
             result.append({
@@ -309,24 +321,34 @@ async def get_my_tasks(
             for stop_row in stops_result:
                 stop_id, location_id, sequence, scheduled_time, location_name = stop_row
                 
-                # Kiểm tra xem có check-in thực tế trong ngày hôm nay không
+                # Kiểm tra xem có check-in thực tế cho task và location này không
+                # LẤY TẤT CẢ CHECK-IN RECORDS CHO LOCATION NÀY
                 checkin_result = db.execute(text("""
-                    SELECT pr.check_in_time, pr.photo_base64
+                    SELECT pr.check_in_time, pr.photo_base64, pr.photo_path, pr.id
                     FROM patrol_records pr
                     WHERE pr.task_id = :task_id 
                     AND pr.location_id = :location_id
-                    AND DATE(pr.check_in_time) = :today
-                    ORDER BY pr.check_in_time DESC
-                    LIMIT 1
+                    AND DATE(pr.check_in_time) = DATE(:task_created_at)
+                    ORDER BY pr.check_in_time ASC
                 """), {
                     "task_id": task.id,
                     "location_id": location_id,
-                    "today": today
+                    "task_created_at": task.created_at
                 })
                 
-                checkin_row = checkin_result.fetchone()
+                # Lấy check-in record đầu tiên cho location này (không phải mới nhất)
+                checkin_rows = checkin_result.fetchall()
+                checkin_row = checkin_rows[0] if checkin_rows else None
+                
                 is_completed_today = checkin_row is not None
                 actual_completed_at = checkin_row[0] if checkin_row else None
+                photo_base64 = checkin_row[1] if checkin_row else None
+                photo_path = checkin_row[2] if checkin_row else None
+                
+                print(f"🔍 MY-TASKS STOP {stop_id} (location {location_id}): scheduled_time={scheduled_time}, is_completed_today={is_completed_today}, actual_completed_at={actual_completed_at}, record_id={checkin_row[3] if checkin_row else None}")
+                if checkin_row:
+                    print(f"📸 MY-TASKS STOP {stop_id} PHOTO: {photo_base64[:50] if photo_base64 else 'NO_PHOTO'}...")
+                    print(f"📸 MY-TASKS STOP {stop_id} PHOTO_PATH: {photo_path}")
                 
                 # Xử lý completed_at - có thể là string hoặc datetime
                 completed_at_str = None
@@ -343,7 +365,9 @@ async def get_my_tasks(
                     "scheduled_time": scheduled_time,
                     "location_name": location_name,
                     "completed": is_completed_today,  # Chỉ true nếu có check-in hôm nay
-                    "completed_at": completed_at_str
+                    "completed_at": completed_at_str,  # Thời gian từ patrol_records, không phải patrol_task_stops
+                    "photo_url": photo_base64,  # Trả về photo_base64 để frontend hiển thị
+                    "photo_path": photo_path  # Trả về photo_path
                 })
 
             task_dict = {

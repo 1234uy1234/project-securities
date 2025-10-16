@@ -3,7 +3,7 @@
  */
 
 // NUCLEAR HTTPS - KHÔNG DÙNG BIẾN MÔI TRƯỜNG
-const NUCLEAR_HTTPS_URL = 'https://biuniquely-wreckful-blake.ngrok-free.dev'
+const NUCLEAR_HTTPS_URL = 'https://rolanda-skinless-sue.ngrok-free.dev'
 
 export const getBaseUrl = () => {
   return NUCLEAR_HTTPS_URL

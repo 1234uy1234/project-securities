@@ -57,7 +57,7 @@ const FaceAuthSettingsPage: React.FC = () => {
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://biuniquely-wreckful-blake.ngrok-free.dev'}/api/face-auth/unregister`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://rolanda-skinless-sue.ngrok-free.dev'}/api/face-auth/unregister`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

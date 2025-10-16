@@ -22,9 +22,27 @@ import { pwaUpdateManager } from './utils/pwaUpdate';
 function App() {
   const { isAuthenticated, user } = useAuthStore();
 
-  // Initialize PWA update manager
+  // Initialize PWA update manager - TEMPORARILY DISABLED
   useEffect(() => {
-    pwaUpdateManager.initialize();
+    // pwaUpdateManager.initialize();
+    console.log('PWA Update Manager temporarily disabled');
+    
+    // Catch any unhandled errors
+    window.addEventListener('error', (event) => {
+      console.error('Global error caught:', event.error);
+      if (event.error && event.error.message && event.error.message.includes('onboarding')) {
+        console.log('Ignoring onboarding.js error from browser extension');
+        event.preventDefault();
+      }
+    });
+    
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      if (event.reason && event.reason.message && event.reason.message.includes('onboarding')) {
+        console.log('Ignoring onboarding.js promise rejection from browser extension');
+        event.preventDefault();
+      }
+    });
   }, []);
 
   // Redirect to login if not authenticated

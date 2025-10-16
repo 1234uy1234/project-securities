@@ -1,0 +1,22 @@
+{
+  "name": "shopee-patrol-system",
+  "version": "1.0.0",
+  "description": "Smart Patrol System with Auto Tunnel Management",
+  "scripts": {
+    "dev": "bash run-cloudflare-static.sh",
+    "start": "bash run-cloudflare-static.sh",
+    "stop": "bash stop-dev.sh",
+    "clean": "bash stop-dev.sh --clean",
+    "setup": "bash quick-start.sh",
+    "backend": "cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "frontend": "cd frontend && npm run dev",
+    "cloudflare": "cloudflared tunnel --url http://localhost:5173",
+    "install-deps": "cd frontend && npm install && cd ../backend && pip install -r requirements.txt"
+  },
+  "keywords": ["patrol", "system", "react", "fastapi", "ngrok", "cloudflare"],
+  "author": "DevOps Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

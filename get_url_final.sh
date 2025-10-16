@@ -18,3 +18,11 @@ echo "🌍 URL sẽ hiển thị ở trên"
 echo "🔐 Login: admin/admin"
 echo "🔧 PID: $CLOUDFLARED_PID"
 
+
+
+
+
+
+
+
+

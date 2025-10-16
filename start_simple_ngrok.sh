@@ -38,8 +38,9 @@ FRONTEND_PID=$!
 
 sleep 5
 
-# Khởi động ngrok cho frontend HTTPS
-echo "🌐 Khởi động ngrok cho frontend HTTPS..."
+# Khởi động ngrok cho frontend HTTPS với auth token
+echo "🌐 Khởi động ngrok cho frontend HTTPS với auth token..."
+ngrok config add-authtoken 342Gw9izZ3uJJH4vo0JGOpEfMKB_5UiXcUoSQhw8jRjyyCqt5
 ngrok http https://0.0.0.0:5173 --host-header=0.0.0.0:5173 --inspect=false &
 NGROK_PID=$!
 

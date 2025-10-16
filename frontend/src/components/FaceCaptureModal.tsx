@@ -142,7 +142,7 @@ const FaceCaptureModal: React.FC<FaceCaptureModalProps> = ({
     setError(null);
     
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'https://biuniquely-wreckful-blake.ngrok-free.dev';
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://rolanda-skinless-sue.ngrok-free.dev';
       const endpoint = mode === 'register' 
         ? `${baseUrl}/api/face-storage/save-face` 
         : `${baseUrl}/api/face-storage/compare-face`;

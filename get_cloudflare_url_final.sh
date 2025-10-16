@@ -42,3 +42,11 @@ echo "   🚫 KHÔNG giới hạn thời gian"
 echo "   🔒 Bảo mật tốt hơn ngrok"
 echo "   ⚡ Hiệu suất cao với CDN"
 
+
+
+
+
+
+
+
+

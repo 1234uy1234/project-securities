@@ -121,3 +121,11 @@ export default GlobalQRScannerComponent;
 
 
 
+
+
+
+
+
+
+
+

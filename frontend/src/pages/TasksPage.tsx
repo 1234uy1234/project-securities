@@ -1115,11 +1115,9 @@ const TasksPage: React.FC = () => {
                         <td className="px-4 py-2 text-sm font-medium text-gray-900">{String(task.title || '')}</td>
                         <td className="px-4 py-2 text-sm text-gray-500">{String(task.description || '-')}</td>
                         <td className="px-4 py-2 text-sm text-gray-500">
-                          {(task as any).assigned_user_name || 
-                           (typeof task.assigned_to === 'object' ? 
-                             (task.assigned_to as any)?.full_name || 'Đã giao' : 
-                             task.assigned_to ? 'Đã giao' : 'Chưa giao'
-                           )}
+                          {(task as any).assigned_user?.full_name || 
+                           (task as any).assigned_user?.username || 
+                           'Chưa giao'}
                         </td>
                         <td className="px-4 py-2">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${

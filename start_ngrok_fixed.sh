@@ -23,9 +23,10 @@ npm run dev &
 FRONTEND_PID=$!
 sleep 5
 
-# Khởi động ngrok với domain cố định
-echo "🌐 Khởi động ngrok với URL cố định..."
+# Khởi động ngrok với domain cố định và auth token
+echo "🌐 Khởi động ngrok với URL cố định và auth token..."
 cd /Users/maybe/Documents/shopee
+ngrok config add-authtoken 342Gw9izZ3uJJH4vo0JGOpEfMKB_5UiXcUoSQhw8jRjyyCqt5
 ngrok http 5173 --domain=your-app.ngrok-free.app &
 NGROK_PID=$!
 sleep 5
@@ -60,4 +61,7 @@ trap cleanup SIGINT SIGTERM
 
 # Keep script running
 wait
+
+
+
 

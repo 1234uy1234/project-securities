@@ -9,7 +9,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     hmr: false,
-    allowedHosts: ['localhost', '127.0.0.1', '0.0.0.0', 'biuniquely-wreckful-blake.ngrok-free.dev'],
+    allowedHosts: ['localhost', '127.0.0.1', '0.0.0.0', 'rolanda-skinless-sue.ngrok-free.dev', 'contributed-baskets-angle-salvador.trycloudflare.com', 'solved-barry-story-little.trycloudflare.com', 'aims-apparel-hire-prints.trycloudflare.com', 'nice-heads-cam-surgical.trycloudflare.com', 'seasons-favor-gnu-soil.trycloudflare.com'],
     proxy: {
       '/api': {
         target: 'http://0.0.0.0:8000',

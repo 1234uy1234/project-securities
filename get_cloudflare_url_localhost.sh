@@ -31,3 +31,11 @@ echo "   - Đã chuyển từ IP 10.10.68.200 sang localhost"
 echo "   - Cloudflare Tunnel hoạt động tốt hơn với localhost"
 echo "   - Không còn lỗi 'Origin DNS error'"
 
+
+
+
+
+
+
+
+

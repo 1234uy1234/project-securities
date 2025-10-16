@@ -30,3 +30,11 @@ echo "🚀 Để chạy tunnel:"
 echo "1. Chạy: ./start_named_tunnel.sh"
 echo "2. URL sẽ không bao giờ thay đổi!"
 
+
+
+
+
+
+
+
+

@@ -24,3 +24,11 @@ echo "1. Mở terminal mới"
 echo "2. Chạy: ./start_cloudflare_tunnel.sh"
 echo "3. URL sẽ hiển thị trong output"
 
+
+
+
+
+
+
+
+

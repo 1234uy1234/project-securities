@@ -61,3 +61,11 @@ echo ""
 echo "✅ Đã sửa lỗi 'Blocked request' - Vite đã cho phép tất cả hosts"
 echo "🔧 PIDs: Backend=$BACKEND_PID, Frontend=$FRONTEND_PID, Cloudflare=$CLOUDFLARE_PID"
 
+
+
+
+
+
+
+
+

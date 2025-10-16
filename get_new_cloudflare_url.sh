@@ -31,3 +31,11 @@ echo "   - URL sẽ thay đổi mỗi lần khởi động lại tunnel"
 echo "   - Không còn lỗi 'Blocked request' hay 'Error 1033'"
 echo "   - Cloudflare Tunnel không giới hạn bandwidth"
 
+
+
+
+
+
+
+
+

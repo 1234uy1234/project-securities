@@ -180,7 +180,7 @@ const FaceAuthModal: React.FC<FaceAuthModalProps> = ({
       
       let endpoint;
       
-      const baseUrl = import.meta.env.VITE_API_URL || 'https://biuniquely-wreckful-blake.ngrok-free.dev';
+      const baseUrl = import.meta.env.VITE_API_URL || 'https://rolanda-skinless-sue.ngrok-free.dev';
       if (mode === 'register') {
         // SỬ DỤNG API MỚI - luôn dùng save-face cho register
         endpoint = `${baseUrl}/api/face-storage/save-face`;

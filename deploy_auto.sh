@@ -93,3 +93,11 @@ echo "📱 Để truy cập lại sau này:"
 echo "   Frontend: https://$FRONTEND_URL"
 echo "   Backend: $BACKEND_URL"
 
+
+
+
+
+
+
+
+

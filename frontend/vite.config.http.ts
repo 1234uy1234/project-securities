@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const backendUrl = env.VITE_API_BASE_URL || 'https://biuniquely-wreckful-blake.ngrok-free.dev'
+  const backendUrl = env.VITE_API_BASE_URL || 'https://rolanda-skinless-sue.ngrok-free.dev'
   
   return {
     plugins: [

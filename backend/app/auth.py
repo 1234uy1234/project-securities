@@ -141,7 +141,9 @@ def require_manager_or_admin():
 def require_admin():
     return require_role(UserRole.ADMIN)
 #cd /Users/maybe/Documents/shopee
-#./quick_start.sh
-
+#./start_all.sh
+#./stop_all.sh
 #cd /Users/maybe/Documents/shopee
 #./stop_system.sh
+#https://semiprivate-interlamellar-phillis.ngrok-free.dev/clear-all.html xoá cache
+#https://semiprivate-interlamellar-phillis.ngrok-free.dev/update-pwa.html 

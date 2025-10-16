@@ -61,3 +61,11 @@ echo ""
 echo "✅ Đã sửa lỗi 'Origin DNS error' - sử dụng localhost"
 echo "🔧 PIDs: Backend=$BACKEND_PID, Frontend=$FRONTEND_PID, Cloudflare=$CLOUDFLARE_PID"
 
+
+
+
+
+
+
+
+

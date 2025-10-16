@@ -15,3 +15,11 @@ cd frontend && vercel login && vercel --prod --yes
 echo "✅ DONE! Check URLs above!"
 echo "🔐 Login: admin/admin"
 
+
+
+
+
+
+
+
+

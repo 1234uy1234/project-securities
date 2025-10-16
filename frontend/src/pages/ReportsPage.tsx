@@ -100,7 +100,7 @@ const ReportsPage = () => {
     if (endDate) params.append('end_date', endDate)
     if (recordId) params.append('record_id', recordId)
     if (taskId) params.append('task_id', taskId)
-    window.open(`https://biuniquely-wreckful-blake.ngrok-free.dev/api/patrol-records/report/csv?${params.toString()}`, '_blank')
+    window.open(`https://rolanda-skinless-sue.ngrok-free.dev/api/patrol-records/report/csv?${params.toString()}`, '_blank')
   }
 
   const deleteRecord = async (recordId: number) => {
