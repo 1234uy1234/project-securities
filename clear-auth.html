@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Authentication Data</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+            background-color: #f0f0f0; 
+        }
+        button { 
+            padding: 15px 30px; 
+            font-size: 1.2em; 
+            cursor: pointer; 
+            background-color: #dc3545; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            margin: 10px; 
+        }
+        button:hover { background-color: #c82333; }
+        .message { 
+            margin-top: 20px; 
+            font-size: 1.1em; 
+            color: #333; 
+            text-align: center;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>Xóa dữ liệu xác thực</h1>
+    <p>Nhấn nút dưới đây để xóa tất cả dữ liệu xác thực và cache.</p>
+    
+    <button id="clearButton">XÓA TẤT CẢ & CHUYỂN VỀ TRANG CHỦ</button>
+    
+    <div id="message" class="message"></div>
+
+    <script>
+        document.getElementById('clearButton').addEventListener('click', async () => {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = 'Đang xóa dữ liệu...';
+
+            try {
+                // Clear localStorage
+                localStorage.clear();
+                messageDiv.innerHTML += '<br>✅ LocalStorage đã xóa.';
+
+                // Clear sessionStorage
+                sessionStorage.clear();
+                messageDiv.innerHTML += '<br>✅ SessionStorage đã xóa.';
+
+                // Clear service workers
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
+                    }
+                    messageDiv.innerHTML += '<br>✅ Service Workers đã xóa.';
+                }
+
+                // Clear caches
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(cacheName => {
+                    return caches.delete(cacheName);
+                }));
+                messageDiv.innerHTML += '<br>✅ Cache đã xóa.';
+
+                messageDiv.innerHTML += '<br><br>✅ Hoàn tất! Đang chuyển về trang chủ...';
+                messageDiv.className = 'message success';
+
+                // Redirect to home page
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+
+            } catch (error) {
+                messageDiv.innerHTML += '<br>❌ Lỗi: ' + error.message;
+                messageDiv.className = 'message error';
+            }
+        });
+    </script>
+</body>
+</html>

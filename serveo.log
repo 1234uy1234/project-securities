@@ -1,0 +1,5 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+[32mForwarding HTTP traffic from https://62e6ebb891dcface872ed26e4fc3be66.serveo.net
+[0mHTTP request from 27.72.116.192 to https://62e6ebb891dcface872ed26e4fc3be66.serveo.net/
+setsockopt TCP_NODELAY: Invalid argument
+connect_to localhost port 5173: failed.

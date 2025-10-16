@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update PWA - MANHTOAN Patrol System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .button {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 20px;
+            margin: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(46,204,113,0.3);
+        }
+        .button:hover {
+            background: #27ae60;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(46,204,113,0.4);
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+        }
+        .success { background: rgba(46, 204, 113, 0.3); }
+        .error { background: rgba(231, 76, 60, 0.3); }
+        .info { background: rgba(52, 152, 219, 0.3); }
+        .warning { background: rgba(241, 196, 15, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Update PWA</h1>
+        <p>Cập nhật PWA để đồng bộ dữ liệu mới nhất</p>
+        
+        <button class="button" onclick="updatePWA()">🚀 UPDATE PWA</button>
+        
+        <div id="status" class="status info">Sẵn sàng cập nhật PWA...</div>
+        
+        <div style="margin-top: 30px; font-size: 14px; opacity: 0.8;">
+            <p><strong>Lưu ý:</strong> Sau khi update, PWA sẽ tự động cập nhật dữ liệu mới nhất</p>
+        </div>
+    </div>
+
+    <script>
+        async function updatePWA() {
+            const status = document.getElementById('status');
+            
+            try {
+                status.innerHTML = '🔄 Đang kiểm tra Service Worker...';
+                
+                if ('serviceWorker' in navigator) {
+                    // Get all registrations
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    
+                    if (registrations.length > 0) {
+                        status.innerHTML = '🔄 Đang cập nhật Service Worker...';
+                        
+                        // Unregister all service workers
+                        for (let registration of registrations) {
+                            await registration.unregister();
+                            console.log('✅ Service Worker unregistered');
+                        }
+                        
+                        status.innerHTML = '🔄 Đang xóa cache cũ...';
+                        
+                        // Clear all caches
+                        if ('caches' in window) {
+                            const cacheNames = await caches.keys();
+                            for (let cacheName of cacheNames) {
+                                await caches.delete(cacheName);
+                                console.log('✅ Cache deleted:', cacheName);
+                            }
+                        }
+                        
+                        status.innerHTML = '🔄 Đang xóa Local Storage...';
+                        
+                        // Clear storage
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        
+                        status.innerHTML = '🔄 Đang đăng ký Service Worker mới...';
+                        
+                        // Register new service worker
+                        const registration = await navigator.serviceWorker.register('/sw.js');
+                        console.log('✅ New Service Worker registered');
+                        
+                        status.innerHTML = '✅ PWA đã được cập nhật thành công!';
+                        status.className = 'status success';
+                        
+                        // Wait a bit then redirect
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 2000);
+                        
+                    } else {
+                        status.innerHTML = '⚠️ Không tìm thấy Service Worker';
+                        status.className = 'status warning';
+                    }
+                } else {
+                    status.innerHTML = '❌ Browser không hỗ trợ Service Worker';
+                    status.className = 'status error';
+                }
+                
+            } catch (error) {
+                status.innerHTML = '❌ Lỗi: ' + error.message;
+                status.className = 'status error';
+                console.error('Update PWA error:', error);
+            }
+        }
+
+        // Auto check for updates
+        window.onload = async function() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.getRegistration();
+                    if (registration) {
+                        // Check for updates
+                        await registration.update();
+                        console.log('✅ Service Worker updated');
+                    }
+                } catch (error) {
+                    console.log('Service Worker update check failed:', error);
+                }
+            }
+        };
+    </script>
+</body>
+</html>

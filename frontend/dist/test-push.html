@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Push Notifications</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Test Push Notifications</h1>
+        
+        <div id="status" class="status info">
+            Đang kiểm tra trạng thái...
+        </div>
+        
+        <div>
+            <button onclick="checkServiceWorker()">1. Kiểm tra Service Worker</button>
+            <button onclick="requestPermission()">2. Yêu cầu quyền thông báo</button>
+            <button onclick="subscribeToPush()">3. Đăng ký Push</button>
+            <button onclick="testNotification()">4. Test thông báo</button>
+            <button onclick="testPushFromServer()">5. Test từ Server</button>
+        </div>
+        
+        <div id="log" class="log">Console log sẽ hiển thị ở đây...\n</div>
+    </div>
+
+    <script>
+        let logElement = document.getElementById('log');
+        let statusElement = document.getElementById('status');
+        
+        function log(message) {
+            console.log(message);
+            logElement.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function updateStatus(message, type = 'info') {
+            statusElement.textContent = message;
+            statusElement.className = 'status ' + type;
+        }
+        
+        async function checkServiceWorker() {
+            log('🔍 Kiểm tra Service Worker...');
+            
+            if (!('serviceWorker' in navigator)) {
+                log('❌ Service Worker không được hỗ trợ');
+                updateStatus('Service Worker không được hỗ trợ', 'error');
+                return;
+            }
+            
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                log('✅ Service Worker đã sẵn sàng');
+                log('📱 Service Worker scope: ' + registration.scope);
+                
+                if (registration.pushManager) {
+                    log('✅ Push Manager có sẵn');
+                } else {
+                    log('❌ Push Manager không có sẵn');
+                }
+                
+                updateStatus('Service Worker hoạt động bình thường', 'success');
+            } catch (error) {
+                log('❌ Lỗi Service Worker: ' + error.message);
+                updateStatus('Lỗi Service Worker', 'error');
+            }
+        }
+        
+        async function requestPermission() {
+            log('🔔 Yêu cầu quyền thông báo...');
+            
+            if (!('Notification' in window)) {
+                log('❌ Notification không được hỗ trợ');
+                updateStatus('Notification không được hỗ trợ', 'error');
+                return;
+            }
+            
+            try {
+                const permission = await Notification.requestPermission();
+                log('📱 Kết quả quyền: ' + permission);
+                
+                if (permission === 'granted') {
+                    log('✅ Đã được cấp quyền thông báo');
+                    updateStatus('Đã được cấp quyền thông báo', 'success');
+                } else {
+                    log('❌ Quyền thông báo bị từ chối');
+                    updateStatus('Quyền thông báo bị từ chối', 'error');
+                }
+            } catch (error) {
+                log('❌ Lỗi yêu cầu quyền: ' + error.message);
+                updateStatus('Lỗi yêu cầu quyền', 'error');
+            }
+        }
+        
+        async function subscribeToPush() {
+            log('📡 Đăng ký Push Subscription...');
+            
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                
+                if (!registration.pushManager) {
+                    log('❌ Push Manager không có sẵn');
+                    return;
+                }
+                
+                const vapidPublicKey = 'BGSuFsu3HNKp0o88tO-gWVzv2WCtmndy4hnkua0hN8EJUmTwJnBos8XwikcVXCRegKdPDcGtIP2JKiHYjiGNHV4';
+                
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+                });
+                
+                log('✅ Đã đăng ký Push Subscription');
+                log('📱 Endpoint: ' + subscription.endpoint.substring(0, 50) + '...');
+                
+                // Lưu subscription để test
+                window.pushSubscription = subscription;
+                
+                updateStatus('Đã đăng ký Push Subscription', 'success');
+            } catch (error) {
+                log('❌ Lỗi đăng ký Push: ' + error.message);
+                updateStatus('Lỗi đăng ký Push', 'error');
+            }
+        }
+        
+        async function testNotification() {
+            log('🔔 Test thông báo thủ công...');
+            
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                
+                await registration.showNotification('Test thông báo', {
+                    body: 'Đây là thông báo test từ Service Worker',
+                    icon: '/icon-192x192.png',
+                    badge: '/icon-96x96.png',
+                    vibrate: [100, 50, 100],
+                    actions: [
+                        {
+                            action: 'open',
+                            title: 'Mở ứng dụng'
+                        },
+                        {
+                            action: 'close',
+                            title: 'Đóng'
+                        }
+                    ]
+                });
+                
+                log('✅ Đã hiển thị thông báo test');
+                updateStatus('Đã hiển thị thông báo test', 'success');
+            } catch (error) {
+                log('❌ Lỗi hiển thị thông báo: ' + error.message);
+                updateStatus('Lỗi hiển thị thông báo', 'error');
+            }
+        }
+        
+        async function testPushFromServer() {
+            log('🌐 Test Push từ Server...');
+            
+            if (!window.pushSubscription) {
+                log('❌ Chưa có Push Subscription, vui lòng đăng ký trước');
+                updateStatus('Chưa có Push Subscription', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/push/test', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                log('📱 Kết quả từ server: ' + JSON.stringify(result));
+                
+                if (result.success) {
+                    log('✅ Server đã gửi push notification');
+                    updateStatus('Server đã gửi push notification', 'success');
+                } else {
+                    log('❌ Server gửi push notification thất bại');
+                    updateStatus('Server gửi push notification thất bại', 'error');
+                }
+            } catch (error) {
+                log('❌ Lỗi gọi API: ' + error.message);
+                updateStatus('Lỗi gọi API', 'error');
+            }
+        }
+        
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+            
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+        
+        // Tự động kiểm tra khi load trang
+        window.addEventListener('load', () => {
+            log('🚀 Trang test push notifications đã load');
+            checkServiceWorker();
+        });
+    </script>
+</body>
+</html>
